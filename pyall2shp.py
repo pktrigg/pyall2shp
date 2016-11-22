@@ -2,6 +2,7 @@ import sys
 sys.path.append("C:/development/Python/pyall")
 
 import argparse
+from argparse import RawTextHelpFormatter
 from datetime import datetime
 import geodetic
 from glob import glob, iglob
@@ -17,17 +18,18 @@ import shapefile
 import fnmatch
 
 def main():
-    parser = argparse.ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.')
+    parser = argparse.ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
+            epilog='Example: \n To convert a single file use -i c:/temp/myfile.all \n to convert all files in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n', formatter_class=RawTextHelpFormatter)
     parser.add_argument('-i', dest='inputFile', action='store', help='-i <ALLfilename> : input ALL filename to image. It can also be a wildcard, e.g. *.all')
+    parser.add_argument('-o', dest='outputFile', action='store', default='track.shp', help='-o <SHPfilename.shp> : output filename to create. e.g. trackplot.shp [Default: track.shp]')
     parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.  [Default: False]')
-
     if len(sys.argv)==1:
         parser.print_help()
         sys.exit(1)
         
     args = parser.parse_args()
     # we need to remember the previous record so we only create uniq values, not duplicates
-    fileOut = "track.shp"
+    fileOut = args.outputFile #"track.shp"
     fileCounter=0
     matches = []
     if os.path.isfile(fileOut):
