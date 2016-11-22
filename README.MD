@@ -24,22 +24,21 @@ Done
 Example
 -------
 
-to see the command line help 
+To see the command line help...
 ```
 python pyall2shp.py
 ```
-python pyall2shp.py -i <filename.all>  
+To create a simple shape file from 1 .all file...
+```
+python pyall2shp.py -i <filename.all>
+```
+To create a single shape file from every .all file in the c:\temp folder, including subfolders...
+```  
 python pyall2shp.py -i c:\temp -r  
+```
 
 output
 ------
-'''
-<?xml version="1.0"?>
-<HIPSVesselConfig Version="2.0">
-  <VesselShape>
-    <PlanCoordinates>
-      <Entry X="-2.000000" Y="-0.000000"/>
-      <Entry X="2.000000" Y="-0.000000"/>
-
 ```
+
 ```
