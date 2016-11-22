@@ -10,24 +10,24 @@ pyall
 
 Done
 ====
-# basic implementation.  It uses the pyall built in function to extract all navigation into a list.  this makes it a small script
-# uses pyshp to create a shape file
-# if the shp file exists, it appends
-# if the shp file does not exist, it creates a new one
-# adds the .all filename to an attribute fields
+* basic implementation.  It uses the pyall built in function to extract all navigation into a list.  this makes it a small script
+* uses pyshp to create a shape file
+* if the shp file exists, it appends
+* if the shp file does not exist, it creates a new one
+* adds the .all filename to an attribute fields
 
 
 2Do
 ===
-#write in SSDM schema format
+* write in SSDM schema format
 
 Example
 -------
 
-to see the 
-'''
+to see the command line help 
+```
 python pyall2shp.py
-'''
+```
 python pyall2shp.py -i <filename.all>  
 python pyall2shp.py -i c:\temp -r  
 
