@@ -28,23 +28,28 @@ def main():
         sys.exit(1)
         
     args = parser.parse_args()
+    print ("ff %s" % (args.outputFile))
     # we need to remember the previous record so we only create uniq values, not duplicates
     fileOut = args.outputFile #"track.shp"
     fileCounter=0
     matches = []
     if os.path.isfile(fileOut):
-        # Create a shapefile reader
-        r = shapefile.Reader(fileOut)
-        # Create a shapefile writer
-        # using the same shape type
-        # as our reader
-        w = shapefile.Writer(r.shapeType)
-        # Copy over the existing dbf fields
-        w.fields = list(r.fields)
-        # Copy over the existing dbf records
-        w.records.extend(r.records())
-        # Copy over the existing polygons
-        w._shapes.extend(r.shapes())
+        try:
+            # Create a shapefile reader
+            r = shapefile.Reader(fileOut)
+            # Create a shapefile writer
+            # using the same shape type
+            # as our reader
+            w = shapefile.Writer(r.shapeType)
+            # Copy over the existing dbf fields
+            w.fields = list(r.fields)
+            # Copy over the existing dbf records
+            w.records.extend(r.records())
+            # Copy over the existing polygons
+            w._shapes.extend(r.shapes())
+        except shapefile.error:
+            print ("Problem opening existing shape file, aborting!")
+            exit()
     else:
         # w = shapefile.Writer(shapefile.POINTZ)
         w = shapefile.Writer(shapefile.POLYLINE)
@@ -52,7 +57,7 @@ def main():
         w.field("LineName", "C")
         
     if args.recursive:
-        for root, dirnames, filenames in os.walk(args.inputFile):
+        for root, dirnames, filenames in os.walk(os.path.dirname(args.inputFile)):
             for f in fnmatch.filter(filenames, '*.all'):
                 matches.append(os.path.join(root, f))
                 print (matches[-1])
@@ -61,7 +66,7 @@ def main():
             matches.append(filename)
         print (matches)
     for filename in matches:
-        print ("processing file: %s" % filename)
+        # print ("processing file: %s" % filename)
         lastTimeStamp = 0
         trackRecordCount = 0
         line_parts = []
@@ -83,7 +88,7 @@ def main():
         # now add to the shape file.
         w.record(os.path.basename(filename))
 
-        # update_progress("Processed file: %s TrackRecords: %d" % (filename, trackRecordCount), (fileCounter/len(matches)))
+        update_progress("Processed: %s (%d/%d)" % (filename, fileCounter, len(matches)), (fileCounter/len(matches)))
         lastTimeStamp = update[0]
         fileCounter +=1
         r.close()
