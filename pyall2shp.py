@@ -1,25 +1,19 @@
 import sys
-sys.path.append("C:/development/Python/pyall")
-
-import argparse
-from argparse import RawTextHelpFormatter
-from datetime import datetime
-import geodetic
-from glob import glob, iglob
-import pyall
 import time
 import os
-import os.path
-import warnings
-from xml.etree.ElementTree import Element, SubElement, Comment, ElementTree
-from xml.etree import ElementTree
-from xml.dom import minidom
-import shapefile
 import fnmatch
+from argparse import ArgumentParser
+from argparse import RawTextHelpFormatter
+from datetime import datetime
+from datetime import timedelta
+from glob import glob
+# local imports
+import pyall
+import shapefile
 
 def main():
-    parser = argparse.ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
-            epilog='Example: \n To convert a single file use -i c:/temp/myfile.all \n to convert all files in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n', formatter_class=RawTextHelpFormatter)
+    parser = ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
+            epilog='Example: \n To convert a single file use -i c:/temp/myfile.all \n to convert all files in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n To convert all .all files recursively from the current folder, use -r -i ./ \n', formatter_class=RawTextHelpFormatter)
     parser.add_argument('-i', dest='inputFile', action='store', help='-i <ALLfilename> : input ALL filename to image. It can also be a wildcard, e.g. *.all')
     parser.add_argument('-o', dest='outputFile', action='store', default='track.shp', help='-o <SHPfilename.shp> : output filename to create. e.g. trackplot.shp [Default: track.shp]')
     parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.  [Default: False]')
@@ -28,11 +22,24 @@ def main():
         sys.exit(1)
         
     args = parser.parse_args()
-    print ("ff %s" % (args.outputFile))
     # we need to remember the previous record so we only create uniq values, not duplicates
     fileOut = args.outputFile #"track.shp"
     fileCounter=0
     matches = []
+        
+    if args.recursive:
+        for root, dirnames, filenames in os.walk(os.path.dirname(args.inputFile)):
+            for f in fnmatch.filter(filenames, '*.all'):
+                matches.append(os.path.join(root, f))
+                print (matches[-1])
+    else:
+        for filename in glob(args.inputFile):
+            matches.append(filename)
+        print (matches)
+    if len(matches) == 0:
+        print ("Nothing found to convert, quitting")
+        exit()
+
     if os.path.isfile(fileOut):
         try:
             # Create a shapefile reader
@@ -55,16 +62,10 @@ def main():
         w = shapefile.Writer(shapefile.POLYLINE)
         w.autoBalance = 1
         w.field("LineName", "C")
+        # w.field("WaterDepth", "N")
+        w.field("UNIXTime", "N")
+        w.field("SurveyDate", "D")
         
-    if args.recursive:
-        for root, dirnames, filenames in os.walk(os.path.dirname(args.inputFile)):
-            for f in fnmatch.filter(filenames, '*.all'):
-                matches.append(os.path.join(root, f))
-                print (matches[-1])
-    else:
-        for filename in glob(args.inputFile):
-            matches.append(filename)
-        print (matches)
     for filename in matches:
         # print ("processing file: %s" % filename)
         lastTimeStamp = 0
@@ -86,15 +87,23 @@ def main():
         line_parts.append(line)
         w.line(parts=line_parts)
         # now add to the shape file.
-        w.record(os.path.basename(filename))
+        recTimeStamp = from_timestamp(navigation[0][0]).strftime("%Y/%m/%d %H:%M:%S")
+        recDate = from_timestamp(navigation[0][0]).strftime("%Y%m%d")
+        depth = 1111.123
+        w.record(os.path.basename(filename), int(navigation[0][0]), recDate) 
+        # w.record(os.path.basename(filename), depth, navigation[0][0], recDate) 
 
         update_progress("Processed: %s (%d/%d)" % (filename, fileCounter, len(matches)), (fileCounter/len(matches)))
         lastTimeStamp = update[0]
         fileCounter +=1
         r.close()
+        update_progress("Process Complete: ", (fileCounter/len(matches)))
 
     print ("Saving shapefile: %s" % fileOut)        
     w.save(fileOut)
+
+def from_timestamp(unixtime):
+    return datetime(1970, 1 ,1) + timedelta(seconds=unixtime)
 
 def update_progress(job_title, progress):
     length = 20 # modify this to change the length
