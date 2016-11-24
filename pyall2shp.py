@@ -97,8 +97,8 @@ def main():
         lastTimeStamp = update[0]
         fileCounter +=1
         r.close()
-        update_progress("Process Complete: ", (fileCounter/len(matches)))
-
+        
+    update_progress("Process Complete: ", (fileCounter/len(matches)))
     print ("Saving shapefile: %s" % fileOut)        
     w.save(fileOut)
 
