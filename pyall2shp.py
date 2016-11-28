@@ -24,6 +24,9 @@ def main():
     args = parser.parse_args()
     # we need to remember the previous record so we only create uniq values, not duplicates
     fileOut = args.outputFile #"track.shp"
+    if not fileOut.lower().endswith('.shp'):
+        fileOut += '.shp'
+
     fileCounter=0
     matches = []
         
@@ -101,6 +104,12 @@ def main():
     update_progress("Process Complete: ", (fileCounter/len(matches)))
     print ("Saving shapefile: %s" % fileOut)        
     w.save(fileOut)
+
+    # now write out a prj file so the data has a spatial Reference
+    f = open(fileOut.replace('.shp','.prj'), 'w')
+    f.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
+    f.close() # you can omit in most cases as the destructor will call it
+    
 
 def from_timestamp(unixtime):
     return datetime(1970, 1 ,1) + timedelta(seconds=unixtime)

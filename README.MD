@@ -1,15 +1,16 @@
 pyall
 =====
 * created:          November 2016
-* version           1.1
+* version           1.2
 * by:               p.kennedy@fugro.com
 * description:      python module to read an Kongsberg .ALL file and create a shape file containing the trackplot in WGS84
 * notes:            See main at end of script for example how to use this
 * based on ALL file version October 2013 
-* developed for Python version 3.4 
+* developed for Python version 3.4 + 2.7
 
 Done
 ====
+* Added WGS84 prj file so ESRI has a spatial reference.  .ALL files are always WGS, so this is an easy one.
 * Added UNIXTime and SurveyDate field for Geosciences Australia
 * Added backward compatibility for ArcGIS 2.7. It now works on Python 2.7 and 3.4
 * Basic implementation.  It uses the pyall built in function to extract all navigation into a list.  this makes it a small script
