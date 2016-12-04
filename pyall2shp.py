@@ -63,20 +63,23 @@ def main():
         coveragePoly = createSHP(coverageFileName, True)
 
     for filename in matches:
-        # print ("processing file: %s" % filename)
+        # this is not a .all file so skip
+        if not filename.lower().endswith('.all'):
+            fileCounter +=1
+            continue
         
         reader = pyall.ALLReader(filename)
         start_time = time.time() # time  the process
 
+        # create the track polyline
         if args.track:
             createTrack(reader, trackLine, float(args.step))
 
-        # create the polygon
+        # create the coverage polygon
         if args.coverage:
             createCoverage(reader, coveragePoly, float(args.step))
 
         update_progress("Processed: %s (%d/%d)" % (filename, fileCounter, len(matches)), (fileCounter/len(matches)))
-        # lastTimeStamp = update[0]
         fileCounter +=1
         reader.close()
 
@@ -84,18 +87,20 @@ def main():
     if args.track:
         print ("Saving track line shapefile: %s" % trackFileName)        
         trackLine.save(trackFileName)
+        # now write out a prj file so the data has a spatial Reference
+        prj = open(trackFileName.replace('.shp','.prj'), 'w')
+        prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
+        prj.close() # you can omit in most cases as the destructor will call it
     if args.coverage:
         print ("Saving coverage polygon shapefile: %s" % coverageFileName)        
         coveragePoly.save(coverageFileName)
-
-    # now write out a prj file so the data has a spatial Reference
-    prj = open(trackFileName.replace('.shp','.prj'), 'w')
-    prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
-    prj.close() # you can omit in most cases as the destructor will call it
+        # now write out a prj file so the data has a spatial Reference
+        prj = open(coverageFileName.replace('.shp','.prj'), 'w')
+        prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
+        prj.close() # you can omit in most cases as the destructor will call it
 
 def createTrack(reader, trackLine, step):
     lastTimeStamp = 0
-    # trackRecordCount = 0
     line_parts = []
     line = []
     navigation = reader.loadNavigation()
@@ -104,7 +109,6 @@ def createTrack(reader, trackLine, step):
     for update in navigation:
         if update[0] - lastTimeStamp >= step:
             line.append([float(update[2]),float(update[1])])
-            # trackRecordCount += 1
             lastTimeStamp = update[0]
     # now add the very last update
     line.append([float(navigation[-1][2]),float(navigation[-1][1])])
@@ -134,7 +138,6 @@ def createCoverage(reader, coveragePoly, step):
         TypeOfDatagram, datagram = reader.readDatagram()
         if (TypeOfDatagram == 'P'):
             datagram.read()
-            # recDate = self.currentRecordDateTime()
             if (selectedPositioningSystem == None):
                 selectedPositioningSystem = datagram.Descriptor
             if (selectedPositioningSystem == datagram.Descriptor):
@@ -165,10 +168,6 @@ def createCoverage(reader, coveragePoly, step):
         poly.append(p)
     for p in right:
         poly.append(p)
-    # left.append(right)
-    # parts.append(left)
-    # reverse the list on the right side so we get a nice polygon.
-    # right.reverse()
     parts.append(poly)
     coveragePoly.poly(parts=parts)
     recDate = from_timestamp(lastTimeStamp).strftime("%Y%m%d")
