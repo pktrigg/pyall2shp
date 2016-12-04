@@ -126,8 +126,8 @@ def createCoverage(reader, coveragePoly, step):
     left = []
     right = []
     selectedPositioningSystem = None
-    Latitude = 0;
-    Longitude = 0
+    latitude = 0;
+    longitude = 0
     leftLatitude = 0;
     leftLongitude = 0
     rightLatitude = 0;
@@ -145,20 +145,27 @@ def createCoverage(reader, coveragePoly, step):
                 longitude = datagram.Longitude
         if TypeOfDatagram == 'D':
             datagram.read()
-            leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90 , math.fabs(datagram.AcrossTrackDistance[0]))
+            if len(datagram.AcrossTrackDistance) == 0:
+                continue
+            if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
+                if (longitude > 0):
+                    leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90 , math.fabs(datagram.AcrossTrackDistance[0]))
 
-            rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90, math.fabs(datagram.AcrossTrackDistance[-1]))
+                    rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90, math.fabs(datagram.AcrossTrackDistance[-1]))
 
         if TypeOfDatagram == 'X':
             datagram.read()
+            if len(datagram.AcrossTrackDistance) == 0:
+                continue
             if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0) :
-                leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90, math.fabs(datagram.AcrossTrackDistance[0]))
+                if (longitude > 0):
+                    leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90, math.fabs(datagram.AcrossTrackDistance[0]))
 
-                rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90,  math.fabs(datagram.AcrossTrackDistance[-1]))
+                    rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90,  math.fabs(datagram.AcrossTrackDistance[-1]))
 
         # add to the shape file at the user required interval
         if to_timestamp(reader.currentRecordDateTime()) - lastTimeStamp >= step:
-            if leftLongitude > 0:
+            if (leftLongitude > 0) and (longitude > 0):
                 left.append([leftLongitude,leftLatitude])        
                 right.insert(0,[rightLongitude,rightLatitude])        
                 lastTimeStamp = to_timestamp(reader.currentRecordDateTime())

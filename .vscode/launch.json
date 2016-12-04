@@ -13,9 +13,11 @@
                 "WaitOnNormalExit",
                 "RedirectOutput"
             ],
-            "args": ["-i", "C:/development/python/EM302/*.all", "-s","10", "-c"]
+           "args": ["-i", "C:/projects/CSIRO/20151124 Mission 1/003_MBES_ALL/em2000-0066-vsm3_20-20151122-165557_P_Depth.all", "-s","10", "-c"]
         }
    ]
 }
+ 
+           "args": ["-i", "C:/development/python/EM302/*.all", "-s","10", "-c"]
             "args": ["-i", "C:/development/python/EM302/1504_20140905_230622_Fugro_Equator_GA4421.all"]
             // "args": ["-r","-i", "C:/development/"]
