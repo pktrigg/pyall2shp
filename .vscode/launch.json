@@ -13,7 +13,7 @@
                 "WaitOnNormalExit",
                 "RedirectOutput"
             ],
-           "args": ["-i", "C:/projects/CSIRO/20151124 Mission 1/003_MBES_ALL/em2000-0066-vsm3_20-20151122-165557_P_Depth.all", "-s","10", "-c"]
+           "args": ["-i", "C:/projects/ConocoBarossa/0104_20170731_084438_Lauri_J.all", "-s","0", "-tp"]
         }
    ]
 }
