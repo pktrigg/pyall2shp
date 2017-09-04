@@ -10,6 +10,8 @@ pyall2shp
 
 Done
 ====
+* improved auto filenaming convention
+* coverage shp file is now smoother
 * decode now uses R_Runtime datagrams
 * Added WGS84 prj file so ESRI has a spatial reference.  .ALL files are always WGS, so this is an easy one.
 * Added UNIXTime and SurveyDate field for Geosciences Australia

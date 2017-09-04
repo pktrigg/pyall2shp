@@ -13,7 +13,7 @@
                 "WaitOnNormalExit",
                 "RedirectOutput"
             ],
-           "args": ["-i", "C:/projects/ConocoBarossa/0104_20170731_084438_Lauri_J.all", "-s","60", "-csv", "-o", "coverage.csv"]
+           "args": ["-i", "C:/development/python/sample.all", "-s","60", "-tp", "-o", "coverage.shp"]
         }
    ]
 }

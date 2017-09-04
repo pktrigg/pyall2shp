@@ -21,7 +21,7 @@ def main():
     parser = ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
             epilog='Example: \n To convert a single file use -i c:/temp/myfile.all \n to convert all files in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n To convert all .all files recursively from the current folder, use -r -i ./ \n', formatter_class=RawTextHelpFormatter)
     parser.add_argument('-i', dest='inputFile', action='store', help='-i <ALLfilename> : input ALL filename to image. It can also be a wildcard, e.g. *.all')
-    parser.add_argument('-o', dest='outputFile', action='store', default='', help='-o <SHPfilename.shp> : output filename to create. e.g. trackplot.shp [Default: track.shp]')
+    parser.add_argument('-o', dest='outputFile', action='store', default='coverage.shp', help='-o <SHPfilename.shp> : output filename to create. e.g. trackplot.shp [Default: track.shp]')
     parser.add_argument('-s', dest='step', action='store', default='30', help='-s <step size in seconds> : decimate the position datagrams to reduce the shapefile size.  Some systems record at 100Hz.  [Default: 30]')
     parser.add_argument('-c', action='store_true', default=False, dest='coverage', help='-c : create coverage polygon shapefile.  [Default: False]')
     parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.  [Default: False]')
@@ -48,19 +48,10 @@ def main():
                 matches.append(filename)
         print (matches)
 
-    if len(args.outputFile) == 0:
-        trackLineFileName = os.path.join(os.path.dirname(os.path.abspath(matches[0])), "trackline.shp")
-        trackLineFileName = createOutputFileName(trackLineFileName)
-        trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(matches[0])), "trackpoint.shp")
-        trackPointFileName = createOutputFileName(trackPointFileName)
-        trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(matches[0])), "trackcoverage.shp")
-        trackCoverageFileName = createOutputFileName(trackCoverageFileName)
-    else:
-        trackLineFileName = args.outputFile 
-    # if not trackLineFileName.lower().endswith('.shp'):
-    #     trackLineFileName += '.shp'
-    #     trackPointFileName += '.shp'
-    #     trackCoverageFileName += '.shp'
+    fname, ext = os.path.splitext(os.path.expanduser(args.outputFile))
+    trackLineFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackLine.shp")
+    trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackPoint.shp")
+    trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackCoverage.shp")
 
     fileCounter=0
     matches = []
@@ -81,13 +72,13 @@ def main():
     # open the output files once only.
     # create the destination shape files 
     if args.trackpoint:
-        shp = createSHP(trackPointFileName, shapefile.POINT)
+        TPshp = createSHP(trackPointFileName, shapefile.POINT)
     if args.trackline:
-        shp = createSHP(trackLineFileName, shapefile.POLYLINE)
+        TLshp = createSHP(trackLineFileName, shapefile.POLYLINE)
     if args.coverage:
-        shp = createSHP(trackCoverageFileName, shapefile.POLYGON)
-    if args.coverage:
-        shp = createSHP(coverageFileName, True)
+        TCshp = createSHP(trackCoverageFileName, shapefile.POLYGON)
+    # if args.coverage:
+    #     shp = createSHP(coverageFileName, True)
     if args.csv:
         csv = open(args.outputFile, 'a')
         csv.write("Filename,Date,Ping,Depth(m),Swathwidth(m),maximumPortWidth(m),maximumStbdWidth(m),maximumPortCoverageDegrees,maximumStbdCoverageDegrees,DepthMode,Speed(Kts),AcrossTrackResolution(m),AlongTrackResolution(m)\n")
@@ -103,15 +94,15 @@ def main():
 
         # create the track point with a point recoard and metadata per ping
         if args.trackpoint:
-            createTrackPoint(reader, shp, float(args.step))
+            createTrackPoint(reader, TPshp, float(args.step))
 
         # create the track polyline
         if args.trackline:
-            createTrackLine(reader, shp, float(args.step))
+            createTrackLine(reader, TLshp, float(args.step))
 
         # create the coverage polygon
         if args.coverage:
-            createCoverage(reader, shp, float(args.step))
+            createCoverage(reader, TCshp, float(args.step))
 
         # create the csv polygon of coverage
         if args.csv:
@@ -124,23 +115,23 @@ def main():
     update_progress("Process Complete: ", (fileCounter/len(matches)))
     if args.trackpoint:
         print ("Saving track point shapefile: %s" % trackPointFileName)        
-        shp.save(trackPointFileName)
+        TPshp.save(trackPointFileName)
         # now write out a prj file so the data has a spatial Reference
         prj = open(trackPointFileName.replace('.shp','.prj'), 'w')
         prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
         prj.close() # you can omit in most cases as the destructor will call it
     if args.trackline:
         print ("Saving track line shapefile: %s" % trackLineFileName)        
-        shp.save(trackLineFileName)
+        TLshp.save(trackLineFileName)
         # now write out a prj file so the data has a spatial Reference
         prj = open(trackLineFileName.replace('.shp','.prj'), 'w')
         prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
         prj.close() # you can omit in most cases as the destructor will call it
     if args.coverage:
-        print ("Saving coverage polygon shapefile: %s" % coverageFileName)        
-        shp.save(coverageFileName)
+        print ("Saving coverage polygon shapefile: %s" % trackCoverageFileName)        
+        TCshp.save(trackCoverageFileName)
         # now write out a prj file so the data has a spatial Reference
-        prj = open(coverageFileName.replace('.shp','.prj'), 'w')
+        prj = open(trackCoverageFileName.replace('.shp','.prj'), 'w')
         prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
         prj.close() # you can omit in most cases as the destructor will call it
 
@@ -163,8 +154,9 @@ def createTrackPoint(reader, shp, step):
             # compute the speed as distance/time
             distance = math.sqrt( ((update[2]-prevX) **2) + ((update[1]-prevY) **2))
             dtime = max(update[0] - prevT, 0.001)
-            speed = (distance/dtime) * 60.0 * 3600 # need to convert from degrees to knots
+            speed = int((distance/dtime) * 60.0 * 3600 * 100) # need to convert from degrees to centi knots
             shp.record(os.path.basename(reader.fileName), int(navigation[0][0]), recDate, speed) 
+            lastTimeStamp = update[0]
             
             # remember the last update
             prevX = update[2]
@@ -281,10 +273,15 @@ def createCoverage(reader, coveragePoly, step):
     selectedPositioningSystem = None
     latitude = 0;
     longitude = 0
-    leftLatitude = 0;
-    leftLongitude = 0
-    rightLatitude = 0;
-    rightLongitude = 0
+    # leftLatitude = 0;
+    # leftLongitude = 0
+    # rightLatitude = 0;
+    # rightLongitude = 0
+
+    heading = []
+    leftside = [] #sliding window
+    rightside = [] #sliding window
+    window = step #sliding window size in number of pings, to smooth the data
 
     reader.rewind()
     while reader.moreData():
@@ -296,32 +293,46 @@ def createCoverage(reader, coveragePoly, step):
             if (selectedPositioningSystem == datagram.Descriptor):
                 latitude = datagram.Latitude
                 longitude = datagram.Longitude
-        if TypeOfDatagram == 'D':
+
+        if TypeOfDatagram == 'D' or TypeOfDatagram == 'X':
             datagram.read()
             if len(datagram.AcrossTrackDistance) == 0:
                 continue
+            if len(datagram.Depth) == 0:
+                continue
+            nadirbeamno = math.floor(len(datagram.Depth)/2)
             if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
-                if (longitude > 0):
-                    leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90 , math.fabs(datagram.AcrossTrackDistance[0]))
+                leftside.append(min(datagram.AcrossTrackDistance))
+                rightside.append(max(datagram.AcrossTrackDistance))
+                heading.append(datagram.Heading)
 
-                    rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90, math.fabs(datagram.AcrossTrackDistance[-1]))
-
-        if TypeOfDatagram == 'X':
-            datagram.read()
-            if len(datagram.AcrossTrackDistance) == 0:
-                continue
-            if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0) :
-                if (longitude > 0):
-                    leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90, math.fabs(datagram.AcrossTrackDistance[0]))
-
-                    rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90,  math.fabs(datagram.AcrossTrackDistance[-1]))
+            # datagram.read()
+            # if len(datagram.AcrossTrackDistance) == 0:
+            #     continue
+            # if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
+            #     if (longitude > 0):
+                    # leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90 , math.fabs(datagram.AcrossTrackDistance[0]))
+                    # rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90, math.fabs(datagram.AcrossTrackDistance[-1]))
 
         # add to the shape file at the user required interval
         if to_timestamp(reader.currentRecordDateTime()) - lastTimeStamp >= step:
+            if len(leftside) == 0:
+                continue
+            leftextent = statistics.median(leftside)
+            rightextent = statistics.median(rightside)
+            hdg = statistics.median(heading)
+            leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg - 90 , math.fabs(leftextent))
+            rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg + 90, math.fabs(rightextent))
+
             if (leftLongitude > 0) and (longitude > 0):
                 left.append([leftLongitude,leftLatitude])        
                 right.insert(0,[rightLongitude,rightLatitude])        
                 lastTimeStamp = to_timestamp(reader.currentRecordDateTime())
+
+        if len(leftside) > window:
+            leftside.pop(0)
+            rightside.pop(0)
+            heading.pop(0)
     
     poly = []
     for p in left:
@@ -349,10 +360,10 @@ def createSHP(fileName, geometrytype=shapefile.POLYLINE):
             writer = shapefile.Writer(r.shapeType)
             # Copy over the existing dbf fields
             writer.fields = list(r.fields)
-            # Copy over the existing dbf records
-            writer.records.extend(r.records())
             # Copy over the existing polygons
             writer._shapes.extend(r.shapes())
+            # Copy over the existing dbf records
+            writer.records.extend(r.records())
         except shapefile.error:
             print ("Problem opening existing shape file, aborting!")
             exit()
@@ -363,7 +374,7 @@ def createSHP(fileName, geometrytype=shapefile.POLYLINE):
         # w.field("WaterDepth", "N")
         writer.field("UNIXTime", "N")
         writer.field("SurveyDate", "D")
-        writer.field("SpeedKnots", "N")
+        writer.field("SpeedCentiKnots", "N")
     return writer
 
 def from_timestamp(unixtime):
