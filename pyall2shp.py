@@ -12,6 +12,7 @@ from glob import glob
 import pyall
 import shapefile
 import geodetic
+import statistics
 
 def main():
 
@@ -23,8 +24,9 @@ def main():
     parser.add_argument('-o', dest='outputFile', action='store', default='', help='-o <SHPfilename.shp> : output filename to create. e.g. trackplot.shp [Default: track.shp]')
     parser.add_argument('-s', dest='step', action='store', default='30', help='-s <step size in seconds> : decimate the position datagrams to reduce the shapefile size.  Some systems record at 100Hz.  [Default: 30]')
     parser.add_argument('-c', action='store_true', default=False, dest='coverage', help='-c : create coverage polygon shapefile.  [Default: False]')
-    parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.  [Default: True]')
-    parser.add_argument('-tp', action='store_true', default=False, dest='trackpoint', help='-tp : create track point shapefile, with runtime information per ping  [Default: True]')
+    parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.  [Default: False]')
+    parser.add_argument('-tp', action='store_true', default=False, dest='trackpoint', help='-tp : create track point shapefile, with runtime information per ping  [Default: False]')
+    parser.add_argument('-csv', action='store_true', default=False, dest='csv', help='-cv : create CSV coverage file, with runtime information per ping  [Default: False]')
     parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.  [Default: False]')
     if len(sys.argv)==1:
         parser.print_help()
@@ -55,10 +57,10 @@ def main():
         trackCoverageFileName = createOutputFileName(trackCoverageFileName)
     else:
         trackLineFileName = args.outputFile 
-    if not trackLineFileName.lower().endswith('.shp'):
-        trackLineFileName += '.shp'
-        trackPointFileName += '.shp'
-        trackCoverageFileName += '.shp'
+    # if not trackLineFileName.lower().endswith('.shp'):
+    #     trackLineFileName += '.shp'
+    #     trackPointFileName += '.shp'
+    #     trackCoverageFileName += '.shp'
 
     fileCounter=0
     matches = []
@@ -86,6 +88,9 @@ def main():
         shp = createSHP(trackCoverageFileName, shapefile.POLYGON)
     if args.coverage:
         shp = createSHP(coverageFileName, True)
+    if args.csv:
+        csv = open(args.outputFile, 'a')
+        csv.write("Filename,Date,Ping,Depth(m),Swathwidth(m),maximumPortWidth(m),maximumStbdWidth(m),maximumPortCoverageDegrees,maximumStbdCoverageDegrees,DepthMode,Speed(Kts),AcrossTrackResolution(m),AlongTrackResolution(m)\n")
 
     for filename in matches:
         # this is not a .all file so skip
@@ -107,6 +112,10 @@ def main():
         # create the coverage polygon
         if args.coverage:
             createCoverage(reader, shp, float(args.step))
+
+        # create the csv polygon of coverage
+        if args.csv:
+            createCSV(reader, csv, float(args.step), filename)
 
         update_progress("Processed: %s (%d/%d)" % (filename, fileCounter, len(matches)), (fileCounter/len(matches)))
         fileCounter +=1
@@ -184,6 +193,85 @@ def createTrackLine(reader, trackLine, step):
     speed = 0
     trackLine.record(os.path.basename(reader.fileName), int(navigation[0][0]), recDate, speed) 
 
+###############################################################################
+def createCSV(reader, csv, step, filename):
+    lastTimeStamp = 0
+    swathwidth = [] #a list of swath widths so we can smooth
+    depths = [] # a list of nadir depths so we can smooth a little
+    ping = 0
+    left = 0
+    right = 0
+    window = 100 #sliding window size in number of pings, to smooth the data
+    maximumPortCoverageDegrees = 0
+    maximumPortWidth = 0
+    maximumStbdCoverageDegrees = 0
+    maximumStbdWidth = 0
+    mode = ''
+    acrosstrackresolution = 0
+    alongtrackresolution = 0
+    nbeams = 0
+    speed = 0
+    pingtimes = []
+    prevX = 0
+    prevY = 0
+    prevT = 0
+
+    reader.rewind()
+    while reader.moreData():
+        TypeOfDatagram, datagram = reader.readDatagram()
+        if TypeOfDatagram == 'R':
+            datagram.read()
+            maximumPortCoverageDegrees = datagram.maximumPortCoverageDegrees
+            maximumPortWidth = datagram.maximumPortWidth
+            maximumStbdCoverageDegrees = datagram.maximumStbdCoverageDegrees
+            maximumStbdWidth = datagram.maximumStbdWidth
+            depthmode = datagram.DepthMode
+
+        if TypeOfDatagram == 'P':
+            datagram.read()
+            speed = datagram.SpeedOverGround
+            distance = math.sqrt( ((datagram.Longitude - prevX) **2) + ((datagram.Latitude - prevY) **2))
+            dtime = max(to_timestamp(reader.currentRecordDateTime()) - prevT, 0.001)
+            speed = (distance/dtime) * 60.0 * 3600 # need to convert from degrees to knots
+            prevX = datagram.Longitude
+            prevY = datagram.Latitude
+            prevT = to_timestamp(reader.currentRecordDateTime())
+        
+        if TypeOfDatagram == 'D' or TypeOfDatagram == 'X':
+            datagram.read()
+            if len(datagram.AcrossTrackDistance) == 0:
+                continue
+            if len(datagram.Depth) == 0:
+                continue
+            nadirbeamno = math.floor(len(datagram.Depth)/2)
+            if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
+                left = min(datagram.AcrossTrackDistance) 
+                right = max(datagram.AcrossTrackDistance)
+                swathwidth.append(math.fabs(left) + math.fabs(right))
+                depths.append(statistics.median(datagram.Depth))
+                # depths.append(datagram.Depth[nadirbeamno])
+                pingtimes.append(to_timestamp(reader.currentRecordDateTime()))
+                ping = datagram.Counter
+                nbeams = datagram.NBeams
+
+        # add to the shape file at the user required interval
+        if to_timestamp(reader.currentRecordDateTime()) - lastTimeStamp >= step:
+            if len(depths) == 0 or len(swathwidth) == 0:
+                continue
+            # we use the maximum depth as the spikes are not real and are typically always shallower
+            # we use the median swath width to get a representative swath
+            swath = statistics.median(swathwidth)
+            acrosstrackresolution = swath / nbeams
+            duration = ( pingtimes[-1] - pingtimes[0] ) / len(pingtimes) #compute the time between pings over the moving window so we see some stability
+            alongtrackresolution = (speed * (1852/3600)) * duration #convert speed to metres/second
+            csv.write("%s,%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f\n" % (filename, str(reader.currentRecordDateTime()), ping, max(depths), swath, maximumPortWidth, maximumStbdWidth, maximumPortCoverageDegrees, maximumStbdCoverageDegrees, depthmode, speed, acrosstrackresolution, alongtrackresolution))
+            lastTimeStamp = to_timestamp(reader.currentRecordDateTime())
+
+        if len(depths) > window:
+            depths.pop(0)
+            swathwidth.pop(0)
+            pingtimes.pop(0)
+    return
     
 def createCoverage(reader, coveragePoly, step):
     lastTimeStamp = 0
