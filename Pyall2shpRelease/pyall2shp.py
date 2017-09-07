@@ -19,15 +19,15 @@ def main():
     matches = []
 
     parser = ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
-            epilog='Example: \n To process a single file use -i c:/temp/myfile.all \n to mass process every file in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n To convert all .all files recursively from the current folder, use -r -i ./*.all \n', formatter_class=RawTextHelpFormatter)
+            epilog='Example: \n To convert a single file use -i c:/temp/myfile.all \n to convert all files in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n To convert all .all files recursively from the current folder, use -r -i ./ \n', formatter_class=RawTextHelpFormatter)
     parser.add_argument('-i', dest='inputFile', action='store', help='-i <ALLfilename> : input ALL filename to image. It can also be a wildcard, e.g. *.all')
-    parser.add_argument('-o', dest='outputFile', action='store', default='coverage.shp', help='-o <SHPfilename.shp> : output filename to create. e.g. coverage.shp [Default: coverage.shp]')
-    parser.add_argument('-s', dest='step', action='store', default='30', help='-s <step size in seconds> : decimate the data to reduce the output size. [Default: 30]')
-    parser.add_argument('-c', action='store_true', default=False, dest='coverage', help='-c : create coverage polygon shapefile.')
-    parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.')
-    parser.add_argument('-tp', action='store_true', default=False, dest='trackpoint', help='-tp : create track point shapefile, with runtime information per ping.')
-    parser.add_argument('-csv', action='store_true', default=False, dest='csv', help='-cv : create CSV coverage file, with runtime information per ping.')
-    parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.')
+    parser.add_argument('-o', dest='outputFile', action='store', default='coverage.shp', help='-o <SHPfilename.shp> : output filename to create. e.g. trackplot.shp [Default: track.shp]')
+    parser.add_argument('-s', dest='step', action='store', default='30', help='-s <step size in seconds> : decimate the position datagrams to reduce the shapefile size.  Some systems record at 100Hz.  [Default: 30]')
+    parser.add_argument('-c', action='store_true', default=False, dest='coverage', help='-c : create coverage polygon shapefile.  [Default: False]')
+    parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.  [Default: False]')
+    parser.add_argument('-tp', action='store_true', default=False, dest='trackpoint', help='-tp : create track point shapefile, with runtime information per ping  [Default: False]')
+    parser.add_argument('-csv', action='store_true', default=False, dest='csv', help='-cv : create CSV coverage file, with runtime information per ping  [Default: False]')
+    parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.  [Default: False]')
     if len(sys.argv)==1:
         parser.print_help()
         sys.exit(1)
