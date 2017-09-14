@@ -10,6 +10,8 @@ pyall2shp
 
 Done
 ====
+* tested against python 2.7
+* added wrapper so the tool works as an ESRI Arc Tool in ArcGIS 10.4
 * improved auto filenaming convention
 * coverage shp file is now smoother
 * decode now uses R_Runtime datagrams

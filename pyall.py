@@ -1035,13 +1035,23 @@ class R_RUNTIME:
 		self.maximumPortWidth	   = s[25]
 		self.beamSpacing			= s[26]
 		self.maximumPortCoverageDegrees	 = s[27]
-		self.yawAndPitchStabilisationMode   = s[28]
+		self.yawMode   = s[28]
 		self.maximumStbdCoverageDegrees	 = s[29]
 		self.maximumStbdWidth			   = s[30]
 		self.transmitAAlongTilt			 = s[31]
 		self.filterIdentifier2			   = s[32]
 		self.ETX							= s[33]
 		self.checksum					   = s[34]
+
+		self.yawAndPitchStabilisationMode   = "Yaw stabilised OFF"
+		if (isBitSet(self.yawMode, 0)):
+			self.yawAndPitchStabilisationMode = "Yaw stabilised ON"
+		if (isBitSet(self.yawMode, 1)):
+			self.yawAndPitchStabilisationMode = "Yaw stabilised ON"
+		if (isBitSet(self.yawMode, 1) and isBitSet(self.yawMode, 0)):
+			self.yawAndPitchStabilisationMode = "Yaw stabilised ON (manual)"
+		if (isBitSet(self.yawMode, 7)):
+			self.yawAndPitchStabilisationMode = self.yawAndPitchStabilisationMode + "+Pitch stabilised ON"
 
 		self.DepthMode = "VeryShallow"
 		if (isBitSet(self.mode, 0)):

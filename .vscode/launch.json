@@ -13,7 +13,7 @@
                 "WaitOnNormalExit",
                 "RedirectOutput"
             ],
-           "args": ["-i", "C:/development/python/sample.all", "-s","60", "-tp", "-o", "coverage.shp"]
+           "args": ["-i", "C:/development/python/0075_20150519_171612_Merlin.all", "-s","0", "-tp", "-o", "coverage.shp"]
         }
    ]
 }
