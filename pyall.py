@@ -1023,7 +1023,7 @@ class R_RUNTIME:
 		self.filterIdentifier	   = s[13]
 		self.minimumDepth		   = s[14]
 		self.maximumDepth		   = s[15]
-		self.absorptionCoefficient  = s[16]
+		self.absorptionCoefficient  = s[16]/100
 		self.transmitPulseLength	= s[17]
 		self.transmitBeamWidth	  = s[18]
 		self.transmitPower		  = s[19]
