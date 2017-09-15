@@ -1043,6 +1043,16 @@ class R_RUNTIME:
 		self.ETX							= s[33]
 		self.checksum					   = s[34]
 
+		self.beamSpacingString = "Determined by beamwidth"
+		if (isBitSet(self.beamSpacing, 0)):
+			self.beamSpacingString = "Equidistant"
+		if (isBitSet(self.beamSpacing, 1)):
+			self.beamSpacingString = "Equiangular"
+		if (isBitSet(self.beamSpacing, 1) and isBitSet(self.beamSpacing, 2)):
+			self.beamSpacingString = "High density equidistant"
+		if (isBitSet(self.beamSpacing, 7)):
+			self.beamSpacingString = self.beamSpacingString + "+Two Heads"
+
 		self.yawAndPitchStabilisationMode   = "Yaw stabilised OFF"
 		if (isBitSet(self.yawMode, 0)):
 			self.yawAndPitchStabilisationMode = "Yaw stabilised ON"

@@ -24,8 +24,8 @@ class Toolbox(object):
 class all2shp(object):
 	def __init__(self):
 		"""Define the tool (tool name is the name of the class)."""
-		self.label = "Kongsberg ALL file coverage extraction V1.0"
-		self.description = "Kongsberg all file coverage and trackplot tool"
+		self.label = "Kongsberg ALL file coverage extraction V1.2"
+		self.description = "Kongsberg .ALL file coverage and trackplot tool"
 		self.canRunInBackground = False
 
 	def getParameterInfo(self):
@@ -145,7 +145,7 @@ def findfiles(inputFile, recursive):
 					# arcpy.AddMessage ("Adding:" + filename)
 					matches.append(filename)
 
-	# arcpy.AddMessage ("Files to process:" + str(matches))
+	arcpy.AddMessage ("Files to process:" + str(matches))
 
 	return matches
 
@@ -184,6 +184,9 @@ def process(args):
 			TPshp.field("DualSwath", "C")
 			TPshp.field("SpikeFilt", "C")
 			TPshp.field("Stabiliser", "C")
+			TPshp.field("MinZGate", "N")
+			TPshp.field("MaxZGate", "N")
+			TPshp.field("BeamSpace", "C")
 
 	if args.trackline:
 		TLshp = createSHP(trackLineFileName, shapefile.POLYLINE)
@@ -266,8 +269,10 @@ def createTrackPoint(reader, shp, step):
 	dualswath = "N/A"
 	spikefilter = "N/A"
 	stabilisation = "N/A"
+	mindepthgate = 0
+	maxdepthgate = 0
+	beamspacing = "N/A"
 
-	# navigation = reader.loadNavigation()
 	# remember the previous records so we can compute the speed
 	prevX = 0
 	prevY = 0
@@ -297,6 +302,9 @@ def createTrackPoint(reader, shp, step):
 			dualswath = datagram.dualSwathMode
 			spikefilter = datagram.filterSetting
 			stabilisation = datagram.yawAndPitchStabilisationMode
+			mindepthgate = datagram.minimumDepth
+			maxdepthgate = datagram.maximumDepth
+			beamspacing = datagram.beamSpacingString
 
 		if recTime - lastTimeStamp > step:
 			if latitude == 0 or longitude == 0:
@@ -310,7 +318,22 @@ def createTrackPoint(reader, shp, step):
 			distance = math.sqrt( ((longitude - prevX) **2) + ((latitude - prevY) **2))
 			dtime = max(lastTimeStamp - prevT, 0.001)
 			speed = int((distance/dtime) * 60.0 * 3600) # need to convert from degrees to knots
-			shp.record(os.path.basename(reader.fileName), int(lastTimeStamp), recDate, speed, int(maximumPortCoverageDegrees), int(maximumStbdCoverageDegrees), int(maximumPortWidth), int(maximumStbdWidth), depthmode, absorptioncoefficient, dualswath, spikefilter, stabilisation)
+			shp.record(os.path.basename(reader.fileName), 
+				int(lastTimeStamp), 
+				recDate, 
+				speed, 
+				int(maximumPortCoverageDegrees), 
+				int(maximumStbdCoverageDegrees), 
+				int(maximumPortWidth), 
+				int(maximumStbdWidth), 
+				depthmode, 
+				absorptioncoefficient, 
+				dualswath, 
+				spikefilter, 
+				stabilisation, 
+				mindepthgate, 
+				maxdepthgate, 
+				beamspacing)
 			
 			# remember the last update
 			prevX = longitude

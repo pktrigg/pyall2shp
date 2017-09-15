@@ -77,6 +77,9 @@ def process(args):
 			TPshp.field("DualSwath", "C")
 			TPshp.field("SpikeFilt", "C")
 			TPshp.field("Stabiliser", "C")
+			TPshp.field("MinZGate", "N")
+			TPshp.field("MaxZGate", "N")
+			TPshp.field("BeamSpace", "C")
 
 	if args.trackline:
 		TLshp = createSHP(trackLineFileName, shapefile.POLYLINE)
@@ -161,7 +164,9 @@ def createTrackPoint(reader, shp, step):
 	dualswath = "N/A"
 	spikefilter = "N/A"
 	stabilisation = "N/A"
-
+	mindepthgate = 0
+	maxdepthgate = 0
+	beamspacing = "N/A"
 	# navigation = reader.loadNavigation()
 	# remember the previous records so we can compute the speed
 	prevX = 0
@@ -187,11 +192,14 @@ def createTrackPoint(reader, shp, step):
 			maximumPortWidth = datagram.maximumPortWidth
 			maximumStbdCoverageDegrees = datagram.maximumStbdCoverageDegrees
 			maximumStbdWidth = datagram.maximumStbdWidth
-			depthmode = datagram.DepthMode
+			depthmode = datagram.DepthMode + "+" + datagram.TXPulseForm
 			absorptioncoefficient = datagram.absorptionCoefficient
 			dualswath = datagram.dualSwathMode
 			spikefilter = datagram.filterSetting
 			stabilisation = datagram.yawAndPitchStabilisationMode
+			mindepthgate = datagram.minimumDepth
+			maxdepthgate = datagram.maximumDepth
+			beamspacing = datagram.beamSpacingString
 
 		if recTime - lastTimeStamp > step:
 			if latitude == 0 or longitude == 0:
@@ -205,7 +213,22 @@ def createTrackPoint(reader, shp, step):
 			distance = math.sqrt( ((longitude - prevX) **2) + ((latitude - prevY) **2))
 			dtime = max(lastTimeStamp - prevT, 0.001)
 			speed = int((distance/dtime) * 60.0 * 3600) # need to convert from degrees to knots
-			shp.record(os.path.basename(reader.fileName), int(lastTimeStamp), recDate, speed, int(maximumPortCoverageDegrees), int(maximumStbdCoverageDegrees), int(maximumPortWidth), int(maximumStbdWidth), depthmode, absorptioncoefficient, dualswath, spikefilter, stabilisation)
+			shp.record(os.path.basename(reader.fileName), 
+				int(lastTimeStamp), 
+				recDate, 
+				speed, 
+				int(maximumPortCoverageDegrees), 
+				int(maximumStbdCoverageDegrees), 
+				int(maximumPortWidth), 
+				int(maximumStbdWidth), 
+				depthmode, 
+				absorptioncoefficient, 
+				dualswath, 
+				spikefilter, 
+				stabilisation, 
+				mindepthgate, 
+				maxdepthgate, 
+				beamspacing)
 			
 			# remember the last update
 			prevX = longitude
