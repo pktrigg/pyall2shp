@@ -24,7 +24,7 @@ class Toolbox(object):
 class all2shp(object):
 	def __init__(self):
 		"""Define the tool (tool name is the name of the class)."""
-		self.label = "Kongsberg ALL file coverage extraction V1.2"
+		self.label = "Kongsberg ALL file coverage extraction V1.3"
 		self.description = "Kongsberg .ALL file coverage and trackplot tool"
 		self.canRunInBackground = False
 
@@ -172,18 +172,21 @@ def process(args):
 		TPshp = createSHP(trackPointFileName, shapefile.POINT)
 		if len(TPshp.fields) <= 1: #there is a default deletion flag field always set, to we need to accoutn for this.
 			TPshp.field("LineName", "C")
-			TPshp.field("UNIXTime", "N")
 			TPshp.field("SurveyDate", "D")
+			TPshp.field("SurveyTime", "C")
+			TPshp.field("UNIXTime", "N")
 			TPshp.field("SpeedKnots", "N")
 			TPshp.field("PortCover", "N")
 			TPshp.field("StbdCover", "N")
 			TPshp.field("PortWidth", "N")
 			TPshp.field("StbdWidth", "N")
 			TPshp.field("DepthMode", "C")
-			TPshp.field("Abs_Coeff", "N")
+			TPshp.field("Absorption", "N")
+			TPshp.field("PulseLength", "N")
+			TPshp.field("TVG", "N")
 			TPshp.field("DualSwath", "C")
 			TPshp.field("SpikeFilt", "C")
-			TPshp.field("Stabiliser", "C")
+			TPshp.field("Stabilise", "C")
 			TPshp.field("MinZGate", "N")
 			TPshp.field("MaxZGate", "N")
 			TPshp.field("BeamSpace", "C")
@@ -255,17 +258,19 @@ def process(args):
 def createTrackPoint(reader, shp, step):
 	lastTimeStamp = 0
 	recTime = 0
+	recTimeString = ""
 	latitude = 0
 	longitude = 0
 	points = []
 	selectedPositioningSystem = None
-
 	maximumPortCoverageDegrees = 0
 	maximumPortWidth = 0
 	maximumStbdCoverageDegrees = 0
 	maximumStbdWidth = 0
 	depthmode = ""
 	absorptioncoefficient = 0
+	pulselength = 0
+	tvg = 0
 	dualswath = "N/A"
 	spikefilter = "N/A"
 	stabilisation = "N/A"
@@ -297,8 +302,10 @@ def createTrackPoint(reader, shp, step):
 			maximumPortWidth = datagram.maximumPortWidth
 			maximumStbdCoverageDegrees = datagram.maximumStbdCoverageDegrees
 			maximumStbdWidth = datagram.maximumStbdWidth
-			depthmode = datagram.DepthMode
+			depthmode = datagram.DepthMode + "+" + datagram.TXPulseForm
 			absorptioncoefficient = datagram.absorptionCoefficient
+			pulselength = datagram.transmitPulseLength
+			tvg = datagram.tvg
 			dualswath = datagram.dualSwathMode
 			spikefilter = datagram.filterSetting
 			stabilisation = datagram.yawAndPitchStabilisationMode
@@ -313,14 +320,16 @@ def createTrackPoint(reader, shp, step):
 			shp.point(longitude,latitude)
 			# now add to the shape file.
 			recDate = from_timestamp(recTime).strftime("%Y%m%d")
+			recTimeString = from_timestamp(recTime).strftime("%H:%M:%S")
 			# write out the shape file FIELDS data
 			# compute the speed as distance/time
 			distance = math.sqrt( ((longitude - prevX) **2) + ((latitude - prevY) **2))
 			dtime = max(lastTimeStamp - prevT, 0.001)
 			speed = int((distance/dtime) * 60.0 * 3600) # need to convert from degrees to knots
 			shp.record(os.path.basename(reader.fileName), 
-				int(lastTimeStamp), 
 				recDate, 
+				recTimeString, 
+				int(lastTimeStamp), 
 				speed, 
 				int(maximumPortCoverageDegrees), 
 				int(maximumStbdCoverageDegrees), 
@@ -328,6 +337,8 @@ def createTrackPoint(reader, shp, step):
 				int(maximumStbdWidth), 
 				depthmode, 
 				absorptioncoefficient, 
+				pulselength, 
+				tvg, 
 				dualswath, 
 				spikefilter, 
 				stabilisation, 
