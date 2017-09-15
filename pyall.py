@@ -1048,7 +1048,7 @@ class R_RUNTIME:
 			self.beamSpacingString = "Equidistant"
 		if (isBitSet(self.beamSpacing, 1)):
 			self.beamSpacingString = "Equiangular"
-		if (isBitSet(self.beamSpacing, 1) and isBitSet(self.beamSpacing, 2)):
+		if (isBitSet(self.beamSpacing, 0) and isBitSet(self.beamSpacing, 1)):
 			self.beamSpacingString = "High density equidistant"
 		if (isBitSet(self.beamSpacing, 7)):
 			self.beamSpacingString = self.beamSpacingString + "+Two Heads"
