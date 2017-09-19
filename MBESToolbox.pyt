@@ -66,13 +66,20 @@ class all2shp(object):
 			direction="Input")
 
 		param5 = arcpy.Parameter(
+			displayName="Create Track Points",
+			name="createtrackpoints",
+			datatype="GPBoolean",
+			parameterType="Required",
+			direction="Input")
+
+		param6 = arcpy.Parameter(
 			displayName="Output File Name:",
 			name="output",
 			datatype="GPString",
 			parameterType="Optional",
 			direction="Input")
 
-		param6 = arcpy.Parameter(
+		param7 = arcpy.Parameter(
 			displayName="Discovered files to process:",
 			name="filestoprocess",
 			datatype="GPString",
@@ -85,9 +92,10 @@ class all2shp(object):
 		param2.value = True
 		param3.value = True
 		param4.value = True
-		param5.value = "Coverage"
+		param5.value = True
+		param6.value = "Coverage"
 		
-		parameters = [param0, param1, param2, param3, param4, param5, param6]
+		parameters = [param0, param1, param2, param3, param4, param5, param6, param7]
 		return parameters
 
 	def isLicensed(self):
@@ -104,7 +112,7 @@ class all2shp(object):
 		files = findfiles(parameters[0].valueAsText + "\\*.all", False)
 		for f in files:
 			txt = txt + f + ","
-		parameters[6].value = txt
+		parameters[7].value = txt
 		return
 
 	def updateMessages(self, parameters):
@@ -119,19 +127,21 @@ class all2shp(object):
 		createcoverage = parameters[2].value
 		createtrackline = parameters[3].value
 		createtrackpoint = parameters[4].value
-		outfile = parameters[5].value
+		createraster = parameters[5].value
+		outfile = parameters[6].value
 
 		arcpy.AddMessage(inputFolder)
 		arcpy.AddMessage("Coverage:"+ str(createcoverage))
 		arcpy.AddMessage("Lines:"+ str(createtrackline))
 		arcpy.AddMessage("Points:"+ str(createtrackpoint))
+		arcpy.AddMessage("raster:"+ str(createraster))
 
 		if createcoverage == False and createtrackline == False and createtrackpoint == False:
 			arcpy.AddMessage("Nothing to do, quitting.")
 
 		# we have some inputs, so we can call the processing script.
 			# we need to ensure the file is a shp extension
-		args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'outputFile': outfile, 'csv':False}
+		args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'raster':createraster, 'outputFile': outfile, 'csv':False}
 		a = namedtuple('GenericDict', args.keys())(**args)
 		
 		process(a)
@@ -174,6 +184,7 @@ def process(args):
 	trackLineFileName = os.path.join(outputfolder, fname + "_trackLine.shp")
 	trackPointFileName = os.path.join(outputfolder, fname + "_trackPoint.shp")
 	trackCoverageFileName = os.path.join(outputfolder, fname + "_trackCoverage.shp")
+	rasterFileName = os.path.join(outputfolder, fname + "_raster")
 
 	# open the output files once only.
 	# create the destination shape files 
