@@ -66,6 +66,13 @@ class all2shp(object):
 			direction="Input")
 
 		param5 = arcpy.Parameter(
+			displayName="Output File Name:",
+			name="output",
+			datatype="GPString",
+			parameterType="Optional",
+			direction="Input")
+
+		param6 = arcpy.Parameter(
 			displayName="Discovered files to process:",
 			name="filestoprocess",
 			datatype="GPString",
@@ -78,8 +85,9 @@ class all2shp(object):
 		param2.value = True
 		param3.value = True
 		param4.value = True
+		param5.value = "Coverage"
 		
-		parameters = [param0, param1, param2, param3, param4, param5]
+		parameters = [param0, param1, param2, param3, param4, param5, param6]
 		return parameters
 
 	def isLicensed(self):
@@ -96,7 +104,7 @@ class all2shp(object):
 		files = findfiles(parameters[0].valueAsText + "\\*.all", False)
 		for f in files:
 			txt = txt + f + ","
-		parameters[5].value = txt
+		parameters[6].value = txt
 		return
 
 	def updateMessages(self, parameters):
@@ -111,6 +119,7 @@ class all2shp(object):
 		createcoverage = parameters[2].value
 		createtrackline = parameters[3].value
 		createtrackpoint = parameters[4].value
+		outfile = parameters[5].value
 
 		arcpy.AddMessage(inputFolder)
 		arcpy.AddMessage("Coverage:"+ str(createcoverage))
@@ -122,7 +131,7 @@ class all2shp(object):
 
 		# we have some inputs, so we can call the processing script.
 			# we need to ensure the file is a shp extension
-		args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'outputFile': 'coverage.shp', 'csv':False}
+		args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'outputFile': outfile, 'csv':False}
 		a = namedtuple('GenericDict', args.keys())(**args)
 		
 		process(a)

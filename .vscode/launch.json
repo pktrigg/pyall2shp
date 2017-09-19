@@ -13,11 +13,12 @@
                 "WaitOnNormalExit",
                 "RedirectOutput"
             ],
-           "args": ["-i", "C:/development/python/sample.all", "-s","0", "-tp", "-o", "coverage.shp"]
+           "args": ["-i", "C:/development/python/sample.all", "-g","1", "-o", "coverage.shp"]
         }
    ]
 }
  
+"args": ["-i", "C:/development/python/sample.all", "-s","0", "-tp", "-o", "coverage.shp"]
 "args": ["-i", "C:/development/python/0075_20150519_171612_Merlin.all", "-s","0", "-tp", "-o", "coverage.shp"]
 "args": ["-i", "C:/development/python/EM302/*.all", "-s","10", "-c"]
             "args": ["-i", "C:/development/python/EM302/1504_20140905_230622_Fugro_Equator_GA4421.all"]
