@@ -24,7 +24,7 @@ class Toolbox(object):
 class all2shp(object):
 	def __init__(self):
 		"""Define the tool (tool name is the name of the class)."""
-		self.label = "Kongsberg ALL file coverage extraction V1.3"
+		self.label = "Kongsberg ALL file coverage extraction V1.5"
 		self.description = "Kongsberg .ALL file coverage and trackplot tool"
 		self.canRunInBackground = False
 
@@ -38,10 +38,10 @@ class all2shp(object):
 			direction="Input")
 		
 		param1 = arcpy.Parameter(
-			displayName="Step size (seconds: default 30)",
+			displayName="Step size between data records.  use 0 for every record which is highly detailed (seconds: default 30)",
 			name="step",
 			datatype="GPLong",
-			parameterType="Optional",
+			parameterType="Required",
 			direction="Input")
 		
 		param2 = arcpy.Parameter(
@@ -65,21 +65,21 @@ class all2shp(object):
 			parameterType="Required",
 			direction="Input")
 
+		# param5 = arcpy.Parameter(
+		# 	displayName="Create Track Points",
+		# 	name="createtrackpoints",
+		# 	datatype="GPBoolean",
+		# 	parameterType="Required",
+		# 	direction="Input")
+
 		param5 = arcpy.Parameter(
-			displayName="Create Track Points",
-			name="createtrackpoints",
-			datatype="GPBoolean",
+			displayName="Output File Name:",
+			name="output",
+			datatype="GPString",
 			parameterType="Required",
 			direction="Input")
 
 		param6 = arcpy.Parameter(
-			displayName="Output File Name:",
-			name="output",
-			datatype="GPString",
-			parameterType="Optional",
-			direction="Input")
-
-		param7 = arcpy.Parameter(
 			displayName="Discovered files to process:",
 			name="filestoprocess",
 			datatype="GPString",
@@ -92,10 +92,10 @@ class all2shp(object):
 		param2.value = True
 		param3.value = True
 		param4.value = True
-		param5.value = True
-		param6.value = "Coverage"
+		# param5.value = True
+		param5.value = "coverage"
 		
-		parameters = [param0, param1, param2, param3, param4, param5, param6, param7]
+		parameters = [param0, param1, param2, param3, param4, param5, param6]
 		return parameters
 
 	def isLicensed(self):
@@ -112,7 +112,7 @@ class all2shp(object):
 		files = findfiles(parameters[0].valueAsText + "\\*.all", False)
 		for f in files:
 			txt = txt + f + ","
-		parameters[7].value = txt
+		parameters[6].value = txt
 		return
 
 	def updateMessages(self, parameters):
@@ -145,6 +145,10 @@ class all2shp(object):
 		a = namedtuple('GenericDict', args.keys())(**args)
 		
 		process(a)
+
+		# # open explorer in the folder so users can see the output shape files...
+		# import subprocess
+		# subprocess.Popen(r'explorer ' + re.escape(inputFolder)
 
 		return
 
