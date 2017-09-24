@@ -13,11 +13,13 @@
                 "WaitOnNormalExit",
                 "RedirectOutput"
             ],
-           "args": ["-i", "C:/development/python/sample.all", "-g","1", "-o", "coverage.shp"]
+			"args": ["-i", "F:\\Projects\\GP1600\\schlangen\\0136_20170915_224607_OE_P1_02.all", "-c", "-s", "2", "-o", "test.shp"]
         }
    ]
 }
  
+
+
 "args": ["-i", "C:/development/python/sample.all", "-s","0", "-tp", "-o", "coverage.shp"]
 "args": ["-i", "C:/development/python/0075_20150519_171612_Merlin.all", "-s","0", "-tp", "-o", "coverage.shp"]
 "args": ["-i", "C:/development/python/EM302/*.all", "-s","10", "-c"]
