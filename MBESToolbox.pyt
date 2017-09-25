@@ -26,7 +26,7 @@ class Toolbox(object):
 class all2shp(object):
 	def __init__(self):
 		"""Define the tool (tool name is the name of the class)."""
-		self.label = "Kongsberg ALL file coverage extraction V1.10"
+		self.label = "Kongsberg ALL file coverage extraction V1.12"
 		self.description = "Kongsberg .ALL file coverage and trackplot tool"
 		self.canRunInBackground = False
 
@@ -142,16 +142,12 @@ class all2shp(object):
 			arcpy.AddMessage("Nothing to do, quitting.")
 
 		# we have some inputs, so we can call the processing script.
-			# we need to ensure the file is a shp extension
+		# we need to ensure the file is a shp extension
 		args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'outputFile': outfile, 'csv':False}
 		# args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'raster':createraster, 'outputFile': outfile, 'csv':False}
 		a = namedtuple('GenericDict', args.keys())(**args)
 		
 		process(a)
-
-		# # open explorer in the folder so users can see the output shape files...
-		# import subprocess
-		# subprocess.Popen(r'explorer ' + re.escape(inputFolder)
 
 		return
 
@@ -203,7 +199,7 @@ def process(args):
 			TPshp.field("SurveyTime", "C")
 			TPshp.field("UNIXTime", "N")
 			TPshp.field("SpeedKnots", "N")
-			TPshp.field("Heading", "N")
+			TPshp.field("Heading", "C")
 			TPshp.field("PortCover", "N")
 			TPshp.field("StbdCover", "N")
 			TPshp.field("PortWidth", "N")
@@ -261,20 +257,6 @@ def process(args):
 		fileCounter +=1
 		reader.close()
 
-	if args.trackpoint:
-		arcpy.AddMessage ("Saving track point shapefile: %s" % trackPointFileName)		
-		TPshp.save(trackPointFileName)
-		# now write out a prj file so the data has a spatial Reference
-		prj = open(trackPointFileName.replace('.shp','.prj'), 'w')
-		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
-		prj.close() # you can omit in most cases as the destructor will call it
-	if args.trackline:
-		arcpy.AddMessage ("Saving track line shapefile: %s" % trackLineFileName)		
-		TLshp.save(trackLineFileName)
-		# now write out a prj file so the data has a spatial Reference
-		prj = open(trackLineFileName.replace('.shp','.prj'), 'w')
-		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
-		prj.close() # you can omit in most cases as the destructor will call it
 	if args.coverage:
 		arcpy.AddMessage ("Saving coverage polygon shapefile: %s" % trackCoverageFileName)		
 		TCshp.save(trackCoverageFileName)
@@ -282,6 +264,48 @@ def process(args):
 		prj = open(trackCoverageFileName.replace('.shp','.prj'), 'w')
 		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
 		prj.close() # you can omit in most cases as the destructor will call it
+		addshapetoArcMap(trackCoverageFileName, False)
+
+	if args.trackline:
+		arcpy.AddMessage ("Saving track line shapefile: %s" % trackLineFileName)		
+		TLshp.save(trackLineFileName)
+		# now write out a prj file so the data has a spatial Reference
+		prj = open(trackLineFileName.replace('.shp','.prj'), 'w')
+		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
+		prj.close() # you can omit in most cases as the destructor will call it
+		addshapetoArcMap(trackLineFileName, False)
+
+	if args.trackpoint:
+		arcpy.AddMessage ("Saving track point shapefile: %s" % trackPointFileName)		
+		TPshp.save(trackPointFileName)
+		# now write out a prj file so the data has a spatial Reference
+		prj = open(trackPointFileName.replace('.shp','.prj'), 'w')
+		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
+		prj.close() # you can omit in most cases as the destructor will call it
+		addshapetoArcMap(trackPointFileName, True)
+
+
+	return
+
+###############################################################################
+def addshapetoArcMap(fileName, refresh=True):
+	#if the shape file exists, and we are in arcmap, we can add the new layers to the map document.
+	if 'ArcMap' in sys.executable:
+		arcpy.AddMessage ("Adding layers to arcmap" )		
+		if os.path.isfile(fileName):
+			try:
+				mxd = arcpy.mapping.MapDocument("CURRENT")
+				df = arcpy.mapping.ListDataFrames(mxd,"*")[0]
+				newlayer1 = arcpy.mapping.Layer(fileName)
+				arcpy.mapping.AddLayer(df, newlayer1, "TOP")  
+				if refresh:
+					arcpy.RefreshActiveView()
+					arcpy.RefreshTOC()
+			except Exception as ex:
+				print(ex.args[0])
+	return
+
+
 
 ###############################################################################
 def createTrackPoint(reader, shp, step):
@@ -370,7 +394,7 @@ def createTrackPoint(reader, shp, step):
 				recTimeString, 
 				int(lastTimeStamp), 
 				speed, 
-				heading, 
+				round(heading,2), 
 				int(maximumPortCoverageDegrees), 
 				int(maximumStbdCoverageDegrees), 
 				int(maximumPortWidth), 

@@ -10,6 +10,8 @@ pyall2shp
 
 Done
 ====
+* now adds the hapes as layers to arcmap if the tool is run withing arcmap
+* improved coverage polygon if the vessel is running circular lines
 * tested against python 2.7
 * added wrapper so the tool works as an ESRI Arc Tool in ArcGIS 10.4
 * improved auto filenaming convention
