@@ -68,14 +68,14 @@ def process(args):
 			TPshp.field("SurveyDate", "D")
 			TPshp.field("SurveyTime", "C")
 			TPshp.field("UNIXTime", "N")
-			TPshp.field("SpeedKnots", "N")
-			TPshp.field("Heading", "N")
+			TPshp.field("SpeedKnots", "C")
+			TPshp.field("Heading", "C")
 			TPshp.field("PortCover", "N")
 			TPshp.field("StbdCover", "N")
 			TPshp.field("PortWidth", "N")
 			TPshp.field("StbdWidth", "N")
 			TPshp.field("DepthMode", "C")
-			TPshp.field("Absorption", "N")
+			TPshp.field("Absorption", "C")
 			TPshp.field("PulseLength", "N")
 			TPshp.field("TVG", "N")
 			TPshp.field("DualSwath", "C")
@@ -236,21 +236,21 @@ def createTrackPoint(reader, shp, step):
 				recDate, 
 				recTimeString, 
 				int(lastTimeStamp), 
-				speed, 
-				heading, 
+				round(speed,2), 
+				round(heading,2), 
 				int(maximumPortCoverageDegrees), 
 				int(maximumStbdCoverageDegrees), 
 				int(maximumPortWidth), 
 				int(maximumStbdWidth), 
 				depthmode, 
-				absorptioncoefficient, 
-				pulselength, 
-				tvg, 
+				round(absorptioncoefficient,2), 
+				int(pulselength), 
+				int(tvg), 
 				dualswath, 
 				spikefilter, 
 				stabilisation, 
-				mindepthgate, 
-				maxdepthgate, 
+				int(mindepthgate), 
+				int(maxdepthgate), 
 				beamspacing,
 				round(mediandepth,2))
 			
@@ -258,6 +258,7 @@ def createTrackPoint(reader, shp, step):
 			prevX = longitude
 			prevY = latitude
 			prevT = lastTimeStamp
+
 ###############################################################################
 def median(lst):
 	n = len(lst)
@@ -288,8 +289,7 @@ def createTrackLine(reader, trackLine, step):
 	# now add to the shape file.
 	recDate = from_timestamp(navigation[0][0]).strftime("%Y%m%d")
 	# write out the shape file FIELDS data
-	speed = 0
-	trackLine.record(os.path.basename(reader.fileName), int(navigation[0][0]), recDate, speed) 
+	trackLine.record(os.path.basename(reader.fileName), recDate) 
 
 ###############################################################################
 def createCSV(reader, csv, step, filename):
@@ -449,6 +449,7 @@ def createCoverage(reader, coveragePoly, step):
 	coveragePoly = writepolygon(coveragePoly, left, right, lastTimeStamp, reader.fileName)
 	return coveragePoly
 
+###############################################################################	
 def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 	parts = []
 	poly = []
@@ -462,105 +463,15 @@ def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 	coveragePoly.poly(parts=parts)
 	recDate = from_timestamp(lastTimeStamp).strftime("%Y%m%d")
 	# write out the shape file FIELDS data
-	coveragePoly.record(os.path.basename(fileName), int(lastTimeStamp), recDate) 
+	coveragePoly.record(os.path.basename(fileName), recDate) 
 	# we have added the record, so now pop everything except the last record
 	while len(left) > 1:
 		left.pop(0)
 		right.pop(0)
 
 	return coveragePoly
-	
 
-# def createCoverage(reader, coveragePoly, step):
-# 	lastTimeStamp = 0
-# 	parts = []
-# 	left = []
-# 	right = []
-# 	selectedPositioningSystem = None
-# 	latitude = 0;
-# 	longitude = 0
-# 	# leftLatitude = 0;
-# 	# leftLongitude = 0
-# 	# rightLatitude = 0;
-# 	# rightLongitude = 0
-
-# 	heading = []
-# 	leftside = [] #sliding window
-# 	rightside = [] #sliding window
-# 	window = step #sliding window size in number of pings, to smooth the data
-# 	pendingrecord = False
-
-# 	reader.rewind()
-# 	while reader.moreData():
-# 		TypeOfDatagram, datagram = reader.readDatagram()
-# 		if (TypeOfDatagram == 'P'):
-# 			datagram.read()
-# 			if (selectedPositioningSystem == None):
-# 				selectedPositioningSystem = datagram.Descriptor
-# 			if (selectedPositioningSystem == datagram.Descriptor):
-# 				latitude = datagram.Latitude
-# 				longitude = datagram.Longitude
-# 				pendingrecord = True #performance upgrade
-
-# 		if pendingrecord == True:
-# 			if TypeOfDatagram == 'D' or TypeOfDatagram == 'X':
-# 				datagram.read()
-# 				if len(datagram.AcrossTrackDistance) == 0:
-# 					continue
-# 				if len(datagram.Depth) == 0:
-# 					continue
-# 				nadirbeamno = math.floor(len(datagram.Depth)/2)
-# 				if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
-# 					leftside.append(min(datagram.AcrossTrackDistance))
-# 					rightside.append(max(datagram.AcrossTrackDistance))
-# 					heading.append(datagram.Heading)
-# 					pendingrecord = False #performance upgrade - only decode teh bathy if needed.
-
-# 			# datagram.read()
-# 			# if len(datagram.AcrossTrackDistance) == 0:
-# 			#	 continue
-# 			# if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
-# 			#	 if (longitude > 0):
-# 					# leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading - 90 , math.fabs(datagram.AcrossTrackDistance[0]))
-# 					# rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, datagram.Heading + 90, math.fabs(datagram.AcrossTrackDistance[-1]))
-
-# 		# add to the shape file at the user required interval
-# 		if to_timestamp(reader.currentRecordDateTime()) - lastTimeStamp >= step:
-# 			if len(leftside) == 0 or len(rightside) == 0:
-# 				continue
-# 			if longitude == 0 or latitude == 0:
-# 				continue
-# 			leftextent = median(leftside)
-# 			# leftextent = statistics.median(leftside)
-# 			rightextent = median(rightside)
-# 			# rightextent = statistics.median(rightside)
-# 			hdg = median(heading)
-# 			# hdg = statistics.median(heading)
-# 			leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg - 90 , math.fabs(leftextent))
-# 			rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg + 90, math.fabs(rightextent))
-# 			left.append([leftLongitude,leftLatitude])		
-# 			right.insert(0,[rightLongitude,rightLatitude])		
-# 			lastTimeStamp = to_timestamp(reader.currentRecordDateTime())
-
-# 		if len(leftside) > window:
-# 			leftside.pop(0)
-# 			rightside.pop(0)
-# 			heading.pop(0)
-	
-# 	poly = []
-# 	for p in left:
-# 		poly.append(p)
-# 	for p in right:
-# 		poly.append(p)
-# 	parts.append(poly)
-# 	coveragePoly.poly(parts=parts)
-# 	recDate = from_timestamp(lastTimeStamp).strftime("%Y%m%d")
-# 	# write out the shape file FIELDS data
-# 	speed = 0
-# 	coveragePoly.record(os.path.basename(reader.fileName), int(lastTimeStamp), recDate, speed) 
-		
-# 	return coveragePoly
-
+###############################################################################	
 def createSHP(fileName, geometrytype=shapefile.POLYLINE):
 	'''open for append or create the shape files. This can be a polyline <false> or polygon '''
 	if os.path.isfile(fileName):
@@ -583,19 +494,17 @@ def createSHP(fileName, geometrytype=shapefile.POLYLINE):
 	else:
 		writer = shapefile.Writer(geometrytype)
 		writer.autoBalance = 1
-		# writer.field("LineName", "C")
-		# # w.field("WaterDepth", "N")
-		# writer.field("UNIXTime", "N")
-		# writer.field("SurveyDate", "D")
-		# writer.field("SpeedCentiKnots", "N")
 	return writer
 
+###############################################################################	
 def from_timestamp(unixtime):
 	return datetime(1970, 1 ,1) + timedelta(seconds=unixtime)
 
+###############################################################################	
 def to_timestamp(recordDate):
 	return (recordDate - datetime(1970, 1, 1)).total_seconds()
 
+###############################################################################	
 def update_progress(job_title, progress):
 	length = 20 # modify this to change the length
 	block = int(round(length*progress))
@@ -629,4 +538,3 @@ def createOutputFileName(path):
 
 if __name__ == "__main__":
 	main()
-

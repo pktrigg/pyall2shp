@@ -1,15 +1,17 @@
 pyall2shp
 =====
 * created:          November 2016
-* version           1.3
+* version           1.14
 * by:               p.kennedy@fugro.com
 * description:      python module to read an Kongsberg .ALL file and create a shape file containing the trackplot in WGS84
 * notes:            See main at end of script for example how to use this
 * based on ALL file version October 2013 
-* developed for Python version 3.4+
+* developed for Python version 3.4+ and 2.7 (for ESRI compatibilty)
 
 Done
 ====
+* fixed bug in date field on coverage (thanks Rhiannon)
+* fixed bug if we open to append to a shape file instead of creating a new one.
 * now adds the hapes as layers to arcmap if the tool is run withing arcmap
 * improved coverage polygon if the vessel is running circular lines
 * tested against python 2.7

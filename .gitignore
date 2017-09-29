@@ -1,3 +1,11 @@
+# personal ignores
+ESRItoolboxrelease*/*
+*.shp
+*.dbf
+*.prj
+*.shx
+# #######################################
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

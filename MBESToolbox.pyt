@@ -26,10 +26,11 @@ class Toolbox(object):
 class all2shp(object):
 	def __init__(self):
 		"""Define the tool (tool name is the name of the class)."""
-		self.label = "Kongsberg ALL file coverage extraction V1.12"
+		self.label = "Kongsberg ALL file coverage extraction V1.17"
 		self.description = "Kongsberg .ALL file coverage and trackplot tool"
 		self.canRunInBackground = False
 
+###############################################################################
 	def getParameterInfo(self):
 		# Input Features parameter
 		param0 = arcpy.Parameter(
@@ -38,29 +39,36 @@ class all2shp(object):
 			datatype="DEFolder",
 			parameterType="Required",
 			direction="Input")
-		
+
 		param1 = arcpy.Parameter(
+			displayName="Process .all files in sub-folders",
+			name="recursive",
+			datatype="GPBoolean",
+			parameterType="Required",
+			direction="Input")
+		
+		param2 = arcpy.Parameter(
 			displayName="Step size between data records.  use 0 for every record which is highly detailed (seconds: default 30)",
 			name="step",
 			datatype="GPLong",
 			parameterType="Required",
 			direction="Input")
 		
-		param2 = arcpy.Parameter(
+		param3 = arcpy.Parameter(
 			displayName="Create Coverage Polygons",
 			name="createcoverage",
 			datatype="GPBoolean",
 			parameterType="Required",
 			direction="Input")
 
-		param3 = arcpy.Parameter(
+		param4 = arcpy.Parameter(
 			displayName="Create Track Lines",
 			name="createtracklines",
 			datatype="GPBoolean",
 			parameterType="Required",
 			direction="Input")
 
-		param4 = arcpy.Parameter(
+		param5 = arcpy.Parameter(
 			displayName="Create Track Points",
 			name="createtrackpoints",
 			datatype="GPBoolean",
@@ -74,14 +82,14 @@ class all2shp(object):
 		# 	parameterType="Required",
 		# 	direction="Input")
 
-		param5 = arcpy.Parameter(
+		param6 = arcpy.Parameter(
 			displayName="Output File Name:",
 			name="output",
 			datatype="GPString",
 			parameterType="Required",
 			direction="Input")
 
-		param6 = arcpy.Parameter(
+		param7 = arcpy.Parameter(
 			displayName="Discovered files to process:",
 			name="filestoprocess",
 			datatype="GPString",
@@ -90,47 +98,56 @@ class all2shp(object):
 			enabled=False)
 			
 		# param0.value = 'c:\\development\\python'
-		param1.value = 10
-		param2.value = True
+		param1.value = False
+		param2.value = 10
 		param3.value = True
 		param4.value = True
+		param5.value = True
 		# param5.value = True
-		param5.value = "coverage"
+		param6.value = "coverage"
 		
-		parameters = [param0, param1, param2, param3, param4, param5, param6]
+		parameters = [param0, param1, param2, param3, param4, param5, param6, param7]
 		return parameters
 
+###############################################################################
 	def isLicensed(self):
 		"""Set whether tool is licensed to execute."""
 		return True
 
+###############################################################################
 	def updateParameters(self, parameters):
 		"""Modify the values and properties of parameters before internal
 		validation is performed.  This method is called whenever a parameter
 		has been changed."""
-		txt = ""
+
 		if not os.path.exists(str(parameters[0].valueAsText)):
 			return
-		files = findfiles(parameters[0].valueAsText + "\\*.all", False)
+		files = findfiles(parameters[0].valueAsText + "\\*.all", parameters[1].value)
+		txt = "Count:" + str(len(files)) + ", "
 		for f in files:
-			txt = txt + f + ","
-		parameters[6].value = txt
+			txt = txt + f + ", "
+			if len(txt) > 128:
+				break
+		parameters[7].value = txt
 		return
 
+###############################################################################
 	def updateMessages(self, parameters):
 		"""Modify the messages created by internal validation for each tool
 		parameter.  This method is called after internal validation."""
 		return
 
+###############################################################################
 	def execute(self, parameters, messages):
 		"""The source code of the tool."""
 		inputFolder = parameters[0].valueAsText + "\\*.all"
-		stepsize = int(parameters[1].valueAsText)
-		createcoverage = parameters[2].value
-		createtrackline = parameters[3].value
-		createtrackpoint = parameters[4].value
+		recursive = parameters[1].value
+		stepsize = int(parameters[2].valueAsText)
+		createcoverage = parameters[3].value
+		createtrackline = parameters[4].value
+		createtrackpoint = parameters[5].value
 		# createraster = parameters[5].value
-		outfile = parameters[5].value
+		outfile = parameters[6].value
 
 		arcpy.AddMessage(inputFolder)
 		arcpy.AddMessage("Coverage:"+ str(createcoverage))
@@ -143,7 +160,7 @@ class all2shp(object):
 
 		# we have some inputs, so we can call the processing script.
 		# we need to ensure the file is a shp extension
-		args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'outputFile': outfile, 'csv':False}
+		args = {'inputFolder': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': recursive, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'outputFile': outfile, 'csv':False}
 		# args = {'inputFile': inputFolder, 'step': stepsize, 'coverage': createcoverage, 'recursive': False, 'trackline':createtrackline, 'trackpoint':createtrackpoint, 'raster':createraster, 'outputFile': outfile, 'csv':False}
 		a = namedtuple('GenericDict', args.keys())(**args)
 		
@@ -152,18 +169,18 @@ class all2shp(object):
 		return
 
 ###############################################################################
-def findfiles(inputFile, recursive):
+def findfiles(inputFolder, recursive):
 	matches = []
 	if recursive:
-		for root, dirnames, filenames in os.walk(os.path.dirname(inputFile)):
+		for root, dirnames, filenames in os.walk(os.path.dirname(inputFolder)):
 			for f in fnmatch.filter(filenames, '*.all'):
 				matches.append(os.path.join(root, f))
 	else:
-		if os.path.isfile(inputFile):
-			matches.append (os.path.abspath(inputFile))
+		if os.path.isfile(inputFolder):
+			matches.append (os.path.abspath(inputFolder))
 			# arcpy.AddMessage ("2 Adding:" + os.path.abspath(inputFile))
 		else:
-			for filename in glob(inputFile):
+			for filename in glob(inputFolder):
 				if os.path.isfile(filename):
 					# arcpy.AddMessage ("Adding:" + filename)
 					matches.append(filename)
@@ -174,7 +191,7 @@ def findfiles(inputFile, recursive):
 ###############################################################################
 def process(args):
 	arcpy.AddMessage("Processing files...")
-	matches = findfiles(args.inputFile, args.recursive)
+	matches = findfiles(args.inputFolder, args.recursive)
 
 	# there are no files to process, so quit
 	if len(matches) == 0:
@@ -182,7 +199,9 @@ def process(args):
 		exit(0)
 
 	fname, ext = os.path.splitext(os.path.expanduser(args.outputFile))
-	outputfolder = os.path.dirname(os.path.abspath(matches[0]))
+
+	outputfolder = os.path.dirname(args.inputFolder)
+	# outputfolder = os.path.dirname(os.path.abspath(matches[0]))
 	arcpy.AddMessage ("output folder:" + outputfolder)
 	trackLineFileName = os.path.join(outputfolder, fname + "_trackLine.shp")
 	trackPointFileName = os.path.join(outputfolder, fname + "_trackPoint.shp")
@@ -195,17 +214,17 @@ def process(args):
 		TPshp = createSHP(trackPointFileName, shapefile.POINT)
 		if len(TPshp.fields) <= 1: #there is a default deletion flag field always set, to we need to accoutn for this.
 			TPshp.field("LineName", "C")
-			TPshp.field("SurveyDate", "D")
+			TPshp.field("SurveyDate", "C")
 			TPshp.field("SurveyTime", "C")
 			TPshp.field("UNIXTime", "N")
-			TPshp.field("SpeedKnots", "N")
+			TPshp.field("SpeedKnots", "C")
 			TPshp.field("Heading", "C")
 			TPshp.field("PortCover", "N")
 			TPshp.field("StbdCover", "N")
 			TPshp.field("PortWidth", "N")
 			TPshp.field("StbdWidth", "N")
 			TPshp.field("DepthMode", "C")
-			TPshp.field("Absorption", "N")
+			TPshp.field("Absorption", "C")
 			TPshp.field("PulseLength", "N")
 			TPshp.field("TVG", "N")
 			TPshp.field("DualSwath", "C")
@@ -220,13 +239,13 @@ def process(args):
 		TLshp = createSHP(trackLineFileName, shapefile.POLYLINE)
 		if len(TLshp.fields) <= 1:
 			TLshp.field("LineName", "C")
-			TLshp.field("SurveyDate", "D")
+			TLshp.field("SurveyDate", "C")
 
 	if args.coverage:
 		TCshp = createSHP(trackCoverageFileName, shapefile.POLYGON)
 		if len(TCshp.fields) <= 1:
 			TCshp.field("LineName", "C")
-			TCshp.field("SurveyDate", "D")
+			TCshp.field("SurveyDate", "C")
 
 	fileCounter=0		
 	for filename in matches:
@@ -283,8 +302,6 @@ def process(args):
 		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
 		prj.close() # you can omit in most cases as the destructor will call it
 		addshapetoArcMap(trackPointFileName, True)
-
-
 	return
 
 ###############################################################################
@@ -304,8 +321,6 @@ def addshapetoArcMap(fileName, refresh=True):
 			except Exception as ex:
 				print(ex.args[0])
 	return
-
-
 
 ###############################################################################
 def createTrackPoint(reader, shp, step):
@@ -382,7 +397,7 @@ def createTrackPoint(reader, shp, step):
 			lastTimeStamp = recTime
 			shp.point(longitude,latitude)
 			# now add to the shape file.
-			recDate = from_timestamp(recTime).strftime("%Y%m%d")
+			recDate = from_timestamp(recTime).strftime("%Y-%m-%d")
 			recTimeString = from_timestamp(recTime).strftime("%H:%M:%S")
 			# write out the shape file FIELDS data
 			# compute the speed as distance/time
@@ -393,21 +408,21 @@ def createTrackPoint(reader, shp, step):
 				recDate, 
 				recTimeString, 
 				int(lastTimeStamp), 
-				speed, 
+				round(speed,2), 
 				round(heading,2), 
 				int(maximumPortCoverageDegrees), 
 				int(maximumStbdCoverageDegrees), 
 				int(maximumPortWidth), 
 				int(maximumStbdWidth), 
 				depthmode, 
-				absorptioncoefficient, 
-				pulselength, 
-				tvg, 
+				round(absorptioncoefficient,2), 
+				int(pulselength), 
+				int(tvg), 
 				dualswath, 
 				spikefilter, 
 				stabilisation, 
-				mindepthgate, 
-				maxdepthgate, 
+				int(mindepthgate), 
+				int(maxdepthgate), 
 				beamspacing,
 				round(mediandepth,2))
 
@@ -416,6 +431,7 @@ def createTrackPoint(reader, shp, step):
 			prevY = latitude
 			prevT = lastTimeStamp
 
+###############################################################################
 def median(lst):
 	n = len(lst)
 	if n < 1:
@@ -453,7 +469,7 @@ def createTrackLine(reader, trackLine, step):
 	line_parts.append(line)
 	trackLine.line(parts=line_parts)
 	# now add to the shape file.
-	recDate = from_timestamp(navigation[0][0]).strftime("%Y%m%d")
+	recDate = from_timestamp(navigation[0][0]).strftime("%Y-%m-%d")
 	# write out the shape file FIELDS data
 	trackLine.record(os.path.basename(reader.fileName), recDate) 
 
@@ -546,9 +562,9 @@ def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 		
 	parts.append(poly)
 	coveragePoly.poly(parts=parts)
-	recDate = from_timestamp(lastTimeStamp).strftime("%Y%m%d")
+	recDate = from_timestamp(lastTimeStamp).strftime("%Y-%m-%d")
 	# write out the shape file FIELDS data
-	coveragePoly.record(os.path.basename(fileName), int(lastTimeStamp), recDate) 
+	coveragePoly.record(os.path.basename(fileName), recDate) 
 	# we have added the record, so now pop everything except the last record
 	while len(left) > 1:
 		left.pop(0)
