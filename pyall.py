@@ -38,7 +38,7 @@ def main():
 		# read a datagram.  If we support it, return the datagram type and aclass for that datagram
 		# The user then needs to call the read() method for the class to undertake a fileread and binary decode.  This keeps the read super quick.
 		typeOfDatagram, datagram = r.readDatagram()
-		print(typeOfDatagram)
+		print(typeOfDatagram, end='')
 		
 		rawbytes = r.readDatagramBytes(datagram.offset, datagram.numberOfBytes)
 		# crc = crc16(rawbytes[4:-2])
@@ -1023,7 +1023,7 @@ class R_RUNTIME:
 		self.filterIdentifier	   = s[13]
 		self.minimumDepth		   = s[14]
 		self.maximumDepth		   = s[15]
-		self.absorptionCoefficient  = s[16]/100
+		self.absorptionCoefficient = s[16]/100
 		self.transmitPulseLength	= s[17]
 		self.transmitBeamWidth	  = s[18]
 		self.transmitPower		  = s[19]
@@ -1411,6 +1411,10 @@ class Y_SEABEDIMAGE:
 ###############################################################################
 def to_timestamp(dateObject):
 	return (dateObject - datetime(1970, 1, 1)).total_seconds()
+def to_DateTime(recordDate, recordTime):
+    '''return a python date object from a split date and time record'''
+    date_object = datetime.strptime(str(recordDate), '%Y%m%d') + timedelta(0,recordTime)
+    return date_object
 
 def from_timestamp(unixtime):
 	return datetime.utcfromtimestamp(unixtime)

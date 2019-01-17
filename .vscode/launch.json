@@ -1,23 +1,18 @@
 {
     "version": "0.2.0",
-    "configurations": [        
+    "configurations": [
         {
             "name": "Python",
             "type": "python",
             "request": "launch",
             "stopOnEntry": false,
             "program": "${file}",
-            "pythonPath": "c:/python34/python.exe",
-            "debugOptions": [
-                "WaitOnAbnormalExit",
-                "WaitOnNormalExit",
-                "RedirectOutput"
-            ],
-			"args": ["-i", "C:\\development\\python\\sample.all", "-tp", "-c","-tl", "-s", "30", "-o", "test.shp"]
+            "pythonPath": "python.exe",
+			"args": ["-i", "C:/projects/IslandPrideSupport/Sample Data/GeoTIFF/2014-06-27T16-28-26.000.05856.164.65078-18236.tif"]
         }
    ]
 }
- 
+
 
 
 "args": ["-i", "F:\\Projects\\GP1600\\schlangen\\0136_20170915_224607_OE_P1_02.all", "-tl", "-s", "30", "-o", "test.shp"]

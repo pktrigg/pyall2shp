@@ -20,17 +20,20 @@ def main():
 	parser = ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
 			epilog='Example: \n To process a single file use -i c:/temp/myfile.all \n to mass process every file in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n To convert all .all files recursively from the current folder, use -r -i ./*.all \n', formatter_class=RawTextHelpFormatter)
 	parser.add_argument('-i', dest='inputFile', action='store', help='-i <ALLfilename> : input ALL filename to image. It can also be a wildcard, e.g. *.all')
-	parser.add_argument('-o', dest='outputFile', action='store', default='coverage.shp', help='-o <SHPfilename.shp> : output filename to create. e.g. coverage.shp [Default: coverage.shp]')
+	parser.add_argument('-o', dest='outputFile', action='store', default='', help='-o <SHPfilename.shp> : output filename to create. e.g. coverage.shp [Default: coverage.shp]')
 	parser.add_argument('-s', dest='step', action='store', default='30', help='-s <step size in seconds> : decimate the data to reduce the output size. [Default: 30]')
 	parser.add_argument('-c', action='store_true', default=False, dest='coverage', help='-c : create coverage polygon shapefile.')
 	parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.')
 	parser.add_argument('-tp', action='store_true', default=False, dest='trackpoint', help='-tp : create track point shapefile, with runtime information per ping.')
 	parser.add_argument('-csv', action='store_true', default=False, dest='csv', help='-cv : create CSV coverage file, with runtime information per ping.')
+	parser.add_argument('-odir', dest='odir', action='store', default="", help='Specify a relative output folder e.g. -odir GIS')
+	parser.add_argument('-odix', dest='odix', action='store', default="", help='Specify an output filename appendage e.g. -odix _coverage')
 	parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.')
+
 	if len(sys.argv)==1:
 		parser.print_help()
 		sys.exit(1)
-		
+
 	args = parser.parse_args()
 	process(args)
 
@@ -38,6 +41,8 @@ def main():
 def process(args):
 	matches = []
 	if args.recursive:
+		if not os.path.exists(args.inputFile):
+			args.inputFile = os.path.join(os.getcwd(), args.inputFile)
 		for root, dirnames, filenames in os.walk(os.path.dirname(args.inputFile)):
 			for f in fnmatch.filter(filenames, '*.all'):
 				matches.append(os.path.join(root, f))
@@ -53,13 +58,29 @@ def process(args):
 		exit()
 	print (matches)
 
-	fname, ext = os.path.splitext(os.path.expanduser(args.outputFile))
-	trackLineFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackLine.shp")
-	trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackPoint.shp")
-	trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackCoverage.shp")
+	if len(args.outputFile) == 0:
+		fname, ext = os.path.splitext(os.path.expanduser(matches[0]))
+		args.outputFile = fname
+
+	# fname, ext = os.path.splitext(os.path.expanduser(args.outputFile))
+
+	# trackLineFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_MBESLine.shp")
+	trackLineFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), args.odir, os.path.basename(args.outputFile) + "_MBESLine.shp")
+	trackLineFileName  = addFileNameAppendage(trackLineFileName, args.odix)
+	trackLineFileName = createOutputFileName(trackLineFileName)
+
+	# trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_MBESPoint.shp")
+	trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), args.odir, os.path.basename(args.outputFile) + "_MBESPoint.shp")
+	trackPointFileName  = addFileNameAppendage(trackPointFileName, args.odix)
+	trackPointFileName = createOutputFileName(trackPointFileName)
+
+	# trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackCoverage.shp")
+	trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), args.odir, os.path.basename(args.outputFile) + "_MBESCoverage.shp")
+	trackCoverageFileName  = addFileNameAppendage(trackCoverageFileName, args.odix)
+	trackCoverageFileName = createOutputFileName(trackCoverageFileName)
 
 	# open the output files once only.
-	# create the destination shape files 
+	# create the destination shape files
 	fileCounter=0
 	if args.trackpoint:
 		TPshp = createSHP(trackPointFileName, shapefile.POINT)
@@ -105,7 +126,7 @@ def process(args):
 		if not filename.lower().endswith('.all'):
 			fileCounter +=1
 			continue
-		
+
 		reader = pyall.ALLReader(filename)
 		start_time = time.time() # time  the process
 
@@ -115,7 +136,8 @@ def process(args):
 
 		# create the track polyline
 		if args.trackline:
-			createTrackLine(reader, TLshp, float(args.step))
+			totalDistanceRun = createTrackLine(reader, TLshp, float(args.step))
+			print ("%s Trackplot Length: %.3f" % (filename, totalDistanceRun))
 
 		# create the coverage polygon
 		if args.coverage:
@@ -131,21 +153,21 @@ def process(args):
 
 	update_progress("Process Complete: ", (fileCounter/len(matches)))
 	if args.trackpoint:
-		print ("Saving track point shapefile: %s" % trackPointFileName)		
+		print ("Saving track point shapefile: %s" % trackPointFileName)
 		TPshp.save(trackPointFileName)
 		# now write out a prj file so the data has a spatial Reference
 		prj = open(trackPointFileName.replace('.shp','.prj'), 'w')
 		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
 		prj.close() # you can omit in most cases as the destructor will call it
 	if args.trackline:
-		print ("Saving track line shapefile: %s" % trackLineFileName)		
+		print ("Saving track line shapefile: %s" % trackLineFileName)
 		TLshp.save(trackLineFileName)
 		# now write out a prj file so the data has a spatial Reference
 		prj = open(trackLineFileName.replace('.shp','.prj'), 'w')
 		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
 		prj.close() # you can omit in most cases as the destructor will call it
 	if args.coverage:
-		print ("Saving coverage polygon shapefile: %s" % trackCoverageFileName)		
+		print ("Saving coverage polygon shapefile: %s" % trackCoverageFileName)
 		TCshp.save(trackCoverageFileName)
 		# now write out a prj file so the data has a spatial Reference
 		prj = open(trackCoverageFileName.replace('.shp','.prj'), 'w')
@@ -232,28 +254,28 @@ def createTrackPoint(reader, shp, step):
 			distance = math.sqrt( ((longitude - prevX) **2) + ((latitude - prevY) **2))
 			dtime = max(lastTimeStamp - prevT, 0.001)
 			speed = int((distance/dtime) * 60.0 * 3600) # need to convert from degrees to knots
-			shp.record(os.path.basename(reader.fileName), 
-				recDate, 
-				recTimeString, 
-				int(lastTimeStamp), 
-				round(speed,2), 
-				round(heading,2), 
-				int(maximumPortCoverageDegrees), 
-				int(maximumStbdCoverageDegrees), 
-				int(maximumPortWidth), 
-				int(maximumStbdWidth), 
-				depthmode, 
-				round(absorptioncoefficient,2), 
-				int(pulselength), 
-				int(tvg), 
-				dualswath, 
-				spikefilter, 
-				stabilisation, 
-				int(mindepthgate), 
-				int(maxdepthgate), 
+			shp.record(os.path.basename(reader.fileName),
+				recDate,
+				recTimeString,
+				int(lastTimeStamp),
+				round(speed,2),
+				round(heading,2),
+				int(maximumPortCoverageDegrees),
+				int(maximumStbdCoverageDegrees),
+				int(maximumPortWidth),
+				int(maximumStbdWidth),
+				depthmode,
+				round(absorptioncoefficient,2),
+				int(pulselength),
+				int(tvg),
+				dualswath,
+				spikefilter,
+				stabilisation,
+				int(mindepthgate),
+				int(maxdepthgate),
 				beamspacing,
 				round(mediandepth,2))
-			
+
 			# remember the last update
 			prevX = longitude
 			prevY = latitude
@@ -275,6 +297,18 @@ def createTrackLine(reader, trackLine, step):
 	line_parts = []
 	line = []
 	navigation = reader.loadNavigation()
+	totalDistanceRun = 0
+	prevX =  navigation[0][2]
+	prevY = navigation[0][1]
+
+	for update in navigation:
+		longitude = update[2]
+		latitude = update[1]
+		distance = geodetic.est_dist(latitude, longitude, prevY, prevX)
+		# distance = math.sqrt( ((longitude - prevX) **2) + ((latitude - prevY) **2))
+		totalDistanceRun += distance
+		prevX = longitude
+		prevY = latitude
 
 	# create the trackline shape file
 	for update in navigation:
@@ -283,13 +317,15 @@ def createTrackLine(reader, trackLine, step):
 			lastTimeStamp = update[0]
 	# now add the very last update
 	line.append([float(navigation[-1][2]),float(navigation[-1][1])])
-		
+
 	line_parts.append(line)
 	trackLine.line(parts=line_parts)
 	# now add to the shape file.
 	recDate = from_timestamp(navigation[0][0]).strftime("%Y%m%d")
 	# write out the shape file FIELDS data
-	trackLine.record(os.path.basename(reader.fileName), recDate) 
+	trackLine.record(os.path.basename(reader.fileName), recDate)
+
+	return totalDistanceRun
 
 ###############################################################################
 def createCSV(reader, csv, step, filename):
@@ -334,7 +370,7 @@ def createCSV(reader, csv, step, filename):
 			prevX = datagram.Longitude
 			prevY = datagram.Latitude
 			prevT = to_timestamp(reader.currentRecordDateTime())
-		
+
 		if TypeOfDatagram == 'D' or TypeOfDatagram == 'X':
 			datagram.read()
 			if len(datagram.AcrossTrackDistance) == 0:
@@ -343,7 +379,7 @@ def createCSV(reader, csv, step, filename):
 				continue
 			nadirbeamno = math.floor(len(datagram.Depth)/2)
 			if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
-				left = min(datagram.AcrossTrackDistance) 
+				left = min(datagram.AcrossTrackDistance)
 				right = max(datagram.AcrossTrackDistance)
 				swathwidth.append(math.fabs(left) + math.fabs(right))
 				depths.append(median(datagram.Depth))
@@ -372,7 +408,7 @@ def createCSV(reader, csv, step, filename):
 			swathwidth.pop(0)
 			pingtimes.pop(0)
 	return
-###############################################################################	
+###############################################################################
 def createCoverage(reader, coveragePoly, step):
 	lastTimeStamp = 0
 	lastheading = None # remember the heading so we can chop up into smaller polygons.  This is important if the vessel is running in circles rather than lines.
@@ -436,11 +472,11 @@ def createCoverage(reader, coveragePoly, step):
 			lastTimeStamp = to_timestamp(reader.currentRecordDateTime())
 
 			# if the heading within the line has changed by more than 30 degrees, write out a polygon and continue.
-			# if abs (hdg - lastheading) > 30: 
-			if (180 - abs (abs(hdg - lastheading) -180)) > 30: 
+			# if abs (hdg - lastheading) > 30:
+			if (180 - abs (abs(hdg - lastheading) -180)) > 30:
 				writepolygon(coveragePoly, left, right, lastTimeStamp, reader.fileName)
 				lastheading = hdg
-				
+
 		if len(leftside) > window:
 			leftside.pop(0)
 			rightside.pop(0)
@@ -449,7 +485,7 @@ def createCoverage(reader, coveragePoly, step):
 	coveragePoly = writepolygon(coveragePoly, left, right, lastTimeStamp, reader.fileName)
 	return coveragePoly
 
-###############################################################################	
+###############################################################################
 def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 	parts = []
 	poly = []
@@ -458,12 +494,12 @@ def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 
 	for p in reversed(right):
 		poly.append(p)
-		
+
 	parts.append(poly)
 	coveragePoly.poly(parts=parts)
 	recDate = from_timestamp(lastTimeStamp).strftime("%Y%m%d")
 	# write out the shape file FIELDS data
-	coveragePoly.record(os.path.basename(fileName), recDate) 
+	coveragePoly.record(os.path.basename(fileName), recDate)
 	# we have added the record, so now pop everything except the last record
 	while len(left) > 1:
 		left.pop(0)
@@ -471,7 +507,7 @@ def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 
 	return coveragePoly
 
-###############################################################################	
+###############################################################################
 def createSHP(fileName, geometrytype=shapefile.POLYLINE):
 	'''open for append or create the shape files. This can be a polyline <false> or polygon '''
 	if os.path.isfile(fileName):
@@ -496,15 +532,15 @@ def createSHP(fileName, geometrytype=shapefile.POLYLINE):
 		writer.autoBalance = 1
 	return writer
 
-###############################################################################	
+###############################################################################
 def from_timestamp(unixtime):
 	return datetime(1970, 1 ,1) + timedelta(seconds=unixtime)
 
-###############################################################################	
+###############################################################################
 def to_timestamp(recordDate):
 	return (recordDate - datetime(1970, 1, 1)).total_seconds()
 
-###############################################################################	
+###############################################################################
 def update_progress(job_title, progress):
 	length = 20 # modify this to change the length
 	block = int(round(length*progress))
@@ -514,9 +550,27 @@ def update_progress(job_title, progress):
 	sys.stdout.flush()
 
 ###############################################################################
-def createOutputFileName(path):
+def addFileNameAppendage(path, appendage):
 	'''Create a valid output filename. if the name of the file already exists the file name is auto-incremented.'''
-	path	  = os.path.expanduser(path)
+	path = os.path.expanduser(path)
+
+	if not os.path.exists(os.path.dirname(path)):
+		os.makedirs(os.path.dirname(path))
+
+	# if not os.path.exists(path):
+	# 	return path
+
+	root, ext = os.path.splitext(os.path.expanduser(path))
+	dir	   = os.path.dirname(root)
+	fname	 = os.path.basename(root)
+	candidate = "{}{}{}".format(fname, appendage, ext)
+
+	return os.path.join(dir, candidate)
+
+###############################################################################
+def createOutputFileName(path, ext=""):
+	'''Create a valid output filename. if the name of the file already exists the file name is auto-incremented.'''
+	path = os.path.expanduser(path)
 
 	if not os.path.exists(os.path.dirname(path)):
 		os.makedirs(os.path.dirname(path))
@@ -524,17 +578,47 @@ def createOutputFileName(path):
 	if not os.path.exists(path):
 		return path
 
-	root, ext = os.path.splitext(os.path.expanduser(path))
-	dir	   = os.path.dirname(root)
-	fname	 = os.path.basename(root)
+	if len(ext) == 0:
+		root, ext = os.path.splitext(os.path.expanduser(path))
+	else:
+		# use the user supplied extension
+		root, ext2 = os.path.splitext(os.path.expanduser(path))
+
+	dir		= os.path.dirname(root)
+	fname	= os.path.basename(root)
 	candidate = fname+ext
-	index	 = 1
+	index	= 1
 	ls		= set(os.listdir(dir))
 	while candidate in ls:
 			candidate = "{}_{}{}".format(fname,index,ext)
 			index	+= 1
 
 	return os.path.join(dir, candidate)
+
+###############################################################################
+
+# ###############################################################################
+# def createOutputFileName(path):
+# 	'''Create a valid output filename. if the name of the file already exists the file name is auto-incremented.'''
+# 	path	  = os.path.expanduser(path)
+
+# 	if not os.path.exists(os.path.dirname(path)):
+# 		os.makedirs(os.path.dirname(path))
+
+# 	if not os.path.exists(path):
+# 		return path
+
+# 	root, ext = os.path.splitext(os.path.expanduser(path))
+# 	dir	   = os.path.dirname(root)
+# 	fname	 = os.path.basename(root)
+# 	candidate = fname+ext
+# 	index	 = 1
+# 	ls		= set(os.listdir(dir))
+# 	while candidate in ls:
+# 			candidate = "{}_{}{}".format(fname,index,ext)
+# 			index	+= 1
+
+# 	return os.path.join(dir, candidate)
 
 if __name__ == "__main__":
 	main()
