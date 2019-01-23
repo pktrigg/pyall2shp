@@ -1,6 +1,7 @@
 import sys
 import time
 import os
+import tempfile
 import fnmatch
 import math
 from argparse import ArgumentParser
@@ -8,13 +9,22 @@ from argparse import RawTextHelpFormatter
 from datetime import datetime
 from datetime import timedelta
 from glob import glob
+import multiprocessing as mp
 
 # local imports
 import pyall
-import shapefile
-import geodetic
-# import statistics
+import pyproj
 
+# local from the shared area...
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'shared'))
+import fileutils
+import geodetic
+import SSDM
+import shapefile
+
+# sys.path.append("../shared")
+# import Common
+# from ..Shared import SSDM
 ##############################################################################
 def main():
 	parser = ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
@@ -22,13 +32,15 @@ def main():
 	parser.add_argument('-i', dest='inputFile', action='store', help='-i <ALLfilename> : input ALL filename to image. It can also be a wildcard, e.g. *.all')
 	parser.add_argument('-o', dest='outputFile', action='store', default='', help='-o <SHPfilename.shp> : output filename to create. e.g. coverage.shp [Default: coverage.shp]')
 	parser.add_argument('-s', dest='step', action='store', default='30', help='-s <step size in seconds> : decimate the data to reduce the output size. [Default: 30]')
-	parser.add_argument('-c', action='store_true', default=False, dest='coverage', help='-c : create coverage polygon shapefile.')
+	parser.add_argument('-tc', action='store_true', default=False, dest='trackcoverage', help='-c : create coverage polygon shapefile.')
 	parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.')
 	parser.add_argument('-tp', action='store_true', default=False, dest='trackpoint', help='-tp : create track point shapefile, with runtime information per ping.')
-	parser.add_argument('-csv', action='store_true', default=False, dest='csv', help='-cv : create CSV coverage file, with runtime information per ping.')
 	parser.add_argument('-odir', dest='odir', action='store', default="", help='Specify a relative output folder e.g. -odir GIS')
+	parser.add_argument('-opath', dest='opath', action='store', default="", help='Specify an output path e.g. -opath c:/temp')
 	parser.add_argument('-odix', dest='odix', action='store', default="", help='Specify an output filename appendage e.g. -odix _coverage')
 	parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.')
+	parser.add_argument('-epsg', dest='epsg', action='store', default="", help='Specify an output EPSG code for transforming from WGS84 to East,North,e.g. -epsg 4326')
+	parser.add_argument('-cores', dest='cores', action='store', default="0", help='Specify the number of cores to use for processing. By default all cores shall be used, e.g. -cores 4')
 
 	if len(sys.argv)==1:
 		parser.print_help()
@@ -39,143 +51,158 @@ def main():
 
 ###############################################################################
 def process(args):
-	matches = []
-	if args.recursive:
-		if not os.path.exists(args.inputFile):
-			args.inputFile = os.path.join(os.getcwd(), args.inputFile)
-		for root, dirnames, filenames in os.walk(os.path.dirname(args.inputFile)):
-			for f in fnmatch.filter(filenames, '*.all'):
-				matches.append(os.path.join(root, f))
-				print (matches[-1])
-	else:
-		if os.path.exists(args.inputFile):
-			matches.append (os.path.abspath(args.inputFile))
-		else:
-			for filename in glob(args.inputFile):
-				matches.append(filename)
-	if len(matches) == 0:
-		print ("Nothing found to convert, quitting")
-		exit()
-	print (matches)
+	matches = fileutils.findFiles(args.recursive, args.inputFile, "*.all")
 
 	if len(args.outputFile) == 0:
 		fname, ext = os.path.splitext(os.path.expanduser(matches[0]))
 		args.outputFile = fname
-
-	# fname, ext = os.path.splitext(os.path.expanduser(args.outputFile))
+		# args.outputFile = "Track"
+	if len(args.opath) == 0:
+		args.opath = os.path.dirname(os.path.abspath(args.outputFile))
 
 	# trackLineFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_MBESLine.shp")
-	trackLineFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), args.odir, os.path.basename(args.outputFile) + "_MBESLine.shp")
+	trackLineFileName = os.path.join(args.opath, args.odir, os.path.basename(args.outputFile) + "Survey_TrackLines.shp")
 	trackLineFileName  = addFileNameAppendage(trackLineFileName, args.odix)
-	trackLineFileName = createOutputFileName(trackLineFileName)
+	trackLineFileName = fileutils.createOutputFileName(trackLineFileName)
 
 	# trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_MBESPoint.shp")
-	trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), args.odir, os.path.basename(args.outputFile) + "_MBESPoint.shp")
+	trackPointFileName = os.path.join(args.opath, args.odir, os.path.basename(args.outputFile) + "_MBESPoint.shp")
 	trackPointFileName  = addFileNameAppendage(trackPointFileName, args.odix)
-	trackPointFileName = createOutputFileName(trackPointFileName)
+	trackPointFileName = fileutils.createOutputFileName(trackPointFileName)
 
 	# trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackCoverage.shp")
-	trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), args.odir, os.path.basename(args.outputFile) + "_MBESCoverage.shp")
+	trackCoverageFileName = os.path.join(args.opath, args.odir, os.path.basename(args.outputFile) + "_MBESCoverage.shp")
 	trackCoverageFileName  = addFileNameAppendage(trackCoverageFileName, args.odix)
-	trackCoverageFileName = createOutputFileName(trackCoverageFileName)
+	trackCoverageFileName = fileutils.createOutputFileName(trackCoverageFileName)
+
+	#load the python proj projection object library if the user has requested it
+	if int(args.epsg) == 4326:
+		args.epsg = "0"
+	if len(args.epsg) > 0:
+		projection = geodetic.loadProj(args.epsg)
+	else:
+		projection = None
 
 	# open the output files once only.
 	# create the destination shape files
-	fileCounter=0
+	TPshp = None
+	TLshp = None
+	TCshp = None
+
+	# fileCounter=0
 	if args.trackpoint:
-		TPshp = createSHP(trackPointFileName, shapefile.POINT)
-		if len(TPshp.fields) <= 1: #there is a default deletion flag field always set, to we need to accoutn for this.
-			TPshp.field("LineName", "C")
-			TPshp.field("SurveyDate", "D")
-			TPshp.field("SurveyTime", "C")
-			TPshp.field("UNIXTime", "N")
-			TPshp.field("SpeedKnots", "C")
-			TPshp.field("Heading", "C")
-			TPshp.field("PortCover", "N")
-			TPshp.field("StbdCover", "N")
-			TPshp.field("PortWidth", "N")
-			TPshp.field("StbdWidth", "N")
-			TPshp.field("DepthMode", "C")
-			TPshp.field("Absorption", "C")
-			TPshp.field("PulseLength", "N")
-			TPshp.field("TVG", "N")
-			TPshp.field("DualSwath", "C")
-			TPshp.field("SpikeFilt", "C")
-			TPshp.field("Stabilise", "C")
-			TPshp.field("MinZGate", "N")
-			TPshp.field("MaxZGate", "N")
-			TPshp.field("BeamSpace", "C")
-			TPshp.field("MedianDepth", "C")
-
+		TPshp = SSDM.createPointShapeFile(trackPointFileName)
 	if args.trackline:
-		TLshp = createSHP(trackLineFileName, shapefile.POLYLINE)
-		if len(TLshp.fields) <= 1:
-			TLshp.field("LineName", "C")
-			TLshp.field("SurveyDate", "D")
-	if args.coverage:
-		TCshp = createSHP(trackCoverageFileName, shapefile.POLYGON)
-		if len(TCshp.fields) <= 1:
-			TCshp.field("LineName", "C")
-			TCshp.field("SurveyDate", "D")
-	if args.csv:
-		csv = open(args.outputFile, 'a')
-		csv.write("Filename,Date,Ping,Depth(m),Swathwidth(m),maximumPortWidth(m),maximumStbdWidth(m),maximumPortCoverageDegrees,maximumStbdCoverageDegrees,DepthMode,Speed(Kts),Heading(Deg),AcrossTrackResolution(m),AlongTrackResolution(m)\n")
+		TLshp = SSDM.createSurveyTracklineSHP(trackLineFileName)
+	if args.trackcoverage:
+		TCshp = SSDM.createCoverageSHP(trackCoverageFileName)
 
-	for filename in matches:
-		# this is not a .all file so skip
-		if not filename.lower().endswith('.all'):
-			fileCounter +=1
-			continue
+	MULTICORE = False
 
-		reader = pyall.ALLReader(filename)
-		start_time = time.time() # time  the process
+	if MULTICORE:
+		# # for multiprocessing we call the process tool based on the number of cores.
+		if int(args.cores) > 0:
+			cores = int(args.cores)
+		else:
+			cores = mp.cpu_count()
+		pool = mp.Pool(processes=int(cores))
 
-		# create the track point with a point recoard and metadata per ping
-		if args.trackpoint:
-			createTrackPoint(reader, TPshp, float(args.step))
-
-		# create the track polyline
 		if args.trackline:
-			totalDistanceRun = createTrackLine(reader, TLshp, float(args.step))
-			print ("%s Trackplot Length: %.3f" % (filename, totalDistanceRun))
+			results = [pool.apply(processTrackLine, args=(filename, float(args.step), trackLineFileName, projection)) for filename in matches]
+			#merge all the results
+			for r in results:
+				for shape in r._shapes:
+					TLshp._shapes.append(shape)
+				# now add the fields
+				for fields in r.records:
+					TLshp.records.append(fields)
 
-		# create the coverage polygon
-		if args.coverage:
-			createCoverage(reader, TCshp, float(args.step))
+		if args.trackcoverage:
+			results = [pool.apply(processTrackCoverage, args=(filename, float(args.step), trackCoverageFileName, projection)) for filename in matches]
+			#merge all the results
+			for r in results:
+				for shape in r._shapes:
+					TCshp._shapes.append(shape)
+				# now add the fields
+				for fields in r.records:
+					TCshp.records.append(fields)
 
-		# create the csv polygon of coverage
-		if args.csv:
-			createCSV(reader, csv, float(args.step), filename)
+		if args.trackpoint:
+			results = [pool.apply(processTrackPoint, args=(filename, float(args.step), trackPointFileName, projection)) for filename in matches]
+			#merge all the results
+			for r in results:
+				for shape in r._shapes:
+					TPshp._shapes.append(shape)
+				# now add the fields
+				for fields in r.records:
+					TPshp.records.append(fields)
+	else:
+		for filename in matches:
+			reader = pyall.ALLReader(filename)
+			if args.trackpoint:
+				# TPshp = processTrackPoint(filename, float(args.step),trackPointFileName, projection)
+				createTrackPoint(reader, TPshp, float(args.step), projection)
+			if args.trackline:
+				# TLshp = processTrackLine(filename, float(args.step), trackLineFileName, projection)
+				totalDistanceRun = createTrackLine(reader, TLshp, float(args.step), projection)
+				# print ("%s Trackplot Length: %.3f" % (filename, totalDistanceRun))
+			if args.trackcoverage:
+				# TCshp = processTrackCoverage(filename, float(args.step), trackCoverageFileName, projection)
+				createTrackCoverage(reader, TCshp, float(args.step), projection)
 
-		update_progress("Processed: %s (%d/%d)" % (filename, fileCounter, len(matches)), (fileCounter/len(matches)))
-		fileCounter +=1
-		reader.close()
+	# 	update_progress("Processed: %s (%d/%d)" % (filename, fileCounter, len(matches)), (fileCounter/len(matches)))
+	# 	fileCounter +=1
 
-	update_progress("Process Complete: ", (fileCounter/len(matches)))
+	#now we can write out the results to a shape file...
+	# update_progress("Process Complete: ", (fileCounter/len(matches)))
 	if args.trackpoint:
 		print ("Saving track point shapefile: %s" % trackPointFileName)
 		TPshp.save(trackPointFileName)
 		# now write out a prj file so the data has a spatial Reference
-		prj = open(trackPointFileName.replace('.shp','.prj'), 'w')
-		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
-		prj.close() # you can omit in most cases as the destructor will call it
+		filename = trackPointFileName.replace('.shp','.prj')
+		geodetic.writePRJ(filename, args.epsg)
 	if args.trackline:
 		print ("Saving track line shapefile: %s" % trackLineFileName)
 		TLshp.save(trackLineFileName)
 		# now write out a prj file so the data has a spatial Reference
-		prj = open(trackLineFileName.replace('.shp','.prj'), 'w')
-		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
-		prj.close() # you can omit in most cases as the destructor will call it
-	if args.coverage:
+		filename = trackLineFileName.replace('.shp','.prj')
+		geodetic.writePRJ(filename, args.epsg)
+	if args.trackcoverage:
 		print ("Saving coverage polygon shapefile: %s" % trackCoverageFileName)
 		TCshp.save(trackCoverageFileName)
 		# now write out a prj file so the data has a spatial Reference
-		prj = open(trackCoverageFileName.replace('.shp','.prj'), 'w')
-		prj.write('GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]') # python will convert \n to os.linesep
-		prj.close() # you can omit in most cases as the destructor will call it
+		filename = trackCoverageFileName.replace('.shp','.prj')
+		geodetic.writePRJ(filename, args.epsg)
+
+def processTrackPoint(filename, step, trackPointFileName, projection):
+	dirname, basename = os.path.split(filename)
+	trackPointFileName = tempfile.NamedTemporaryFile(prefix=basename, dir=dirname)
+	shp = SSDM.createPointShapeFile(trackPointFileName)
+	reader = pyall.ALLReader(filename)
+	# create the track point with a point recoard and metadata per ping
+	createTrackPoint(reader, shp, step, projection)
+	reader.close()
+	return shp
+
+def processTrackLine(filename, step, trackLineFileName, projection):
+	shp = SSDM.createSurveyTracklineSHP(trackLineFileName)
+	reader = pyall.ALLReader(filename)
+	# create the track polyline
+	totalDistanceRun = createTrackLine(reader, shp, step, projection)
+	print ("%s Trackplot Length: %.3f" % (filename, totalDistanceRun))
+	reader.close()
+	return shp
+
+def processTrackCoverage(filename, step, trackCoverageFileName, projection):
+	shp = SSDM.createCoverageSHP(trackCoverageFileName)
+	reader = pyall.ALLReader(filename)
+	# create the coverage polygon
+	createTrackCoverage(reader, shp, step, projection)
+	reader.close()
+	return shp
 
 ###############################################################################
-def createTrackPoint(reader, shp, step):
+def createTrackPoint(reader, shp, step, projection):
 	lastTimeStamp = 0
 	recTime = 0
 	recTimeString = ""
@@ -245,7 +272,11 @@ def createTrackPoint(reader, shp, step):
 			if latitude == 0 or longitude == 0:
 				continue
 			lastTimeStamp = recTime
-			shp.point(longitude,latitude)
+			if projection is not None:
+				x,y = projection(float(longitude),float(latitude))
+				shp.point(x,y)
+			else:
+				shp.point(longitude,latitude)
 			# now add to the shape file.
 			recDate = from_timestamp(recTime).strftime("%Y%m%d")
 			recTimeString = from_timestamp(recTime).strftime("%H:%M:%S")
@@ -292,12 +323,14 @@ def median(lst):
 			return sum(sorted(lst)[n//2-1:n//2+1])/2.0
 
 ###############################################################################
-def createTrackLine(reader, trackLine, step):
+def createTrackLine(reader, trackLine, step, projection):
 	lastTimeStamp = 0
 	line_parts = []
 	line = []
 	navigation = reader.loadNavigation()
 	totalDistanceRun = 0
+	if len(navigation) == 0: #trap out empty .all files.
+		return totalDistanceRun
 	prevX =  navigation[0][2]
 	prevY = navigation[0][1]
 
@@ -313,111 +346,54 @@ def createTrackLine(reader, trackLine, step):
 	# create the trackline shape file
 	for update in navigation:
 		if update[0] - lastTimeStamp >= step:
-			line.append([float(update[2]),float(update[1])])
+			if projection is not None:
+				x,y = projection(float(update[2]),float(update[1]))
+				line.append([x,y])
+			else:
+				line.append([float(update[2]),float(update[1])])
 			lastTimeStamp = update[0]
 	# now add the very last update
 	line.append([float(navigation[-1][2]),float(navigation[-1][1])])
-
+	# print("Points added to track: %d" % (len(line)))
 	line_parts.append(line)
 	trackLine.line(parts=line_parts)
 	# now add to the shape file.
 	recDate = from_timestamp(navigation[0][0]).strftime("%Y%m%d")
 	# write out the shape file FIELDS data
-	trackLine.record(os.path.basename(reader.fileName), recDate)
-
+	# preparedDate = datetime.now()
+	userName = os.getenv('username')
+	filename = os.path.basename(reader.fileName)
+	trackLine.record(LAST_UPDATE = recDate,
+		LAST_UPDATE_BY=userName,
+		FEATURE_ID=0,
+		SURVEY_ID=0,
+		SURVEY_ID_REF=filename,
+		REMARKS=reader.fileName,
+		LINE_ID=0,
+		LINE_NAME=filename[:40],
+		LINE_DIRECTION=1.123,
+		SYMBOLOGY_CODE=0,
+		LAST_SEIS_PT_ID=0,
+		DATA_SOURCE=filename,
+		CONTRACTOR_NAME= userName,
+		LINE_LENGTH = distance,
+		FIRST_SEIS_PT_ID= 0,
+		HIRES_SEISMIC_EQL_URL= "",
+		OTHER_DATA_URL = "",
+		LAYER= "",
+		SHAPE_Length= distance
+		)
 	return totalDistanceRun
 
 ###############################################################################
-def createCSV(reader, csv, step, filename):
-	lastTimeStamp = 0
-	swathwidth = [] #a list of swath widths so we can smooth
-	depths = [] # a list of nadir depths so we can smooth a little
-	ping = 0
-	left = 0
-	right = 0
-	window = 100 #sliding window size in number of pings, to smooth the data
-	maximumPortCoverageDegrees = 0
-	maximumPortWidth = 0
-	maximumStbdCoverageDegrees = 0
-	maximumStbdWidth = 0
-	mode = ''
-	acrosstrackresolution = 0
-	alongtrackresolution = 0
-	nbeams = 0
-	speed = 0
-	pingtimes = []
-	prevX = 0
-	prevY = 0
-	prevT = 0
-
-	reader.rewind()
-	while reader.moreData():
-		TypeOfDatagram, datagram = reader.readDatagram()
-		if TypeOfDatagram == 'R':
-			datagram.read()
-			maximumPortCoverageDegrees = datagram.maximumPortCoverageDegrees
-			maximumPortWidth = datagram.maximumPortWidth
-			maximumStbdCoverageDegrees = datagram.maximumStbdCoverageDegrees
-			maximumStbdWidth = datagram.maximumStbdWidth
-			depthmode = datagram.DepthMode
-
-		if TypeOfDatagram == 'P':
-			datagram.read()
-			speed = datagram.SpeedOverGround
-			distance = math.sqrt( ((datagram.Longitude - prevX) **2) + ((datagram.Latitude - prevY) **2))
-			dtime = max(to_timestamp(reader.currentRecordDateTime()) - prevT, 0.001)
-			speed = (distance/dtime) * 60.0 * 3600 # need to convert from degrees to knots
-			prevX = datagram.Longitude
-			prevY = datagram.Latitude
-			prevT = to_timestamp(reader.currentRecordDateTime())
-
-		if TypeOfDatagram == 'D' or TypeOfDatagram == 'X':
-			datagram.read()
-			if len(datagram.AcrossTrackDistance) == 0:
-				continue
-			if len(datagram.Depth) == 0:
-				continue
-			nadirbeamno = math.floor(len(datagram.Depth)/2)
-			if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
-				left = min(datagram.AcrossTrackDistance)
-				right = max(datagram.AcrossTrackDistance)
-				swathwidth.append(math.fabs(left) + math.fabs(right))
-				depths.append(median(datagram.Depth))
-				# depths.append(statistics.median(datagram.Depth))
-				# depths.append(datagram.Depth[nadirbeamno])
-				pingtimes.append(to_timestamp(reader.currentRecordDateTime()))
-				ping = datagram.Counter
-				nbeams = datagram.NBeams
-
-		# add to the shape file at the user required interval
-		if to_timestamp(reader.currentRecordDateTime()) - lastTimeStamp >= step:
-			if len(depths) == 0 or len(swathwidth) == 0:
-				continue
-			# we use the maximum depth as the spikes are not real and are typically always shallower
-			# we use the median swath width to get a representative swath
-			swath = median(swathwidth)
-			# swath = statistics.median(swathwidth)
-			acrosstrackresolution = swath / nbeams
-			duration = ( pingtimes[-1] - pingtimes[0] ) / len(pingtimes) #compute the time between pings over the moving window so we see some stability
-			alongtrackresolution = (speed * (1852/3600)) * duration #convert speed to metres/second
-			csv.write("%s,%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f\n" % (filename, str(reader.currentRecordDateTime()), ping, max(depths), swath, maximumPortWidth, maximumStbdWidth, maximumPortCoverageDegrees, maximumStbdCoverageDegrees, depthmode, speed, acrosstrackresolution, alongtrackresolution))
-			lastTimeStamp = to_timestamp(reader.currentRecordDateTime())
-
-		if len(depths) > window:
-			depths.pop(0)
-			swathwidth.pop(0)
-			pingtimes.pop(0)
-	return
-###############################################################################
-def createCoverage(reader, coveragePoly, step):
+def createTrackCoverage(reader, coveragePoly, step, projection):
 	lastTimeStamp = 0
 	lastheading = None # remember the heading so we can chop up into smaller polygons.  This is important if the vessel is running in circles rather than lines.
 	left = []
 	right = []
 	selectedPositioningSystem = None
-	latitude = 0;
+	latitude = 0
 	longitude = 0
-
 	heading = []
 	leftside = [] #sliding window
 	rightside = [] #sliding window
@@ -466,9 +442,16 @@ def createCoverage(reader, coveragePoly, step):
 			# hdg = statistics.median(heading)
 			leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg - 90 , math.fabs(leftextent))
 			rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg + 90, math.fabs(rightextent))
-			left.append([leftLongitude,leftLatitude])
-			right.append([rightLongitude,rightLatitude])
-			# right.insert(0,[rightLongitude,rightLatitude])
+
+			if projection is not None:
+				x,y = projection(float(leftLongitude),float(leftLatitude))
+				left.append([x,y])
+				x,y = projection(float(rightLongitude),float(rightLatitude))
+				right.append([x,y])
+			else:
+				left.append([leftLongitude,leftLatitude])
+				right.append([rightLongitude,rightLatitude])
+
 			lastTimeStamp = to_timestamp(reader.currentRecordDateTime())
 
 			# if the heading within the line has changed by more than 30 degrees, write out a polygon and continue.
@@ -499,6 +482,7 @@ def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 	coveragePoly.poly(parts=parts)
 	recDate = from_timestamp(lastTimeStamp).strftime("%Y%m%d")
 	# write out the shape file FIELDS data
+
 	coveragePoly.record(os.path.basename(fileName), recDate)
 	# we have added the record, so now pop everything except the last record
 	while len(left) > 1:
@@ -507,30 +491,6 @@ def writepolygon(coveragePoly, left, right, lastTimeStamp, fileName):
 
 	return coveragePoly
 
-###############################################################################
-def createSHP(fileName, geometrytype=shapefile.POLYLINE):
-	'''open for append or create the shape files. This can be a polyline <false> or polygon '''
-	if os.path.isfile(fileName):
-		try:
-			# Create a shapefile reader
-			r = shapefile.Reader(fileName)
-			# Create a shapefile writer
-			# using the same shape type
-			# as our reader
-			writer = shapefile.Writer(r.shapeType)
-			# Copy over the existing dbf fields
-			writer.fields = list(r.fields)
-			# Copy over the existing polygons
-			writer._shapes.extend(r.shapes())
-			# Copy over the existing dbf records
-			writer.records.extend(r.records())
-		except shapefile.error:
-			print ("Problem opening existing shape file, aborting!")
-			exit()
-	else:
-		writer = shapefile.Writer(geometrytype)
-		writer.autoBalance = 1
-	return writer
 
 ###############################################################################
 def from_timestamp(unixtime):
@@ -567,58 +527,87 @@ def addFileNameAppendage(path, appendage):
 
 	return os.path.join(dir, candidate)
 
-###############################################################################
-def createOutputFileName(path, ext=""):
-	'''Create a valid output filename. if the name of the file already exists the file name is auto-incremented.'''
-	path = os.path.expanduser(path)
-
-	if not os.path.exists(os.path.dirname(path)):
-		os.makedirs(os.path.dirname(path))
-
-	if not os.path.exists(path):
-		return path
-
-	if len(ext) == 0:
-		root, ext = os.path.splitext(os.path.expanduser(path))
-	else:
-		# use the user supplied extension
-		root, ext2 = os.path.splitext(os.path.expanduser(path))
-
-	dir		= os.path.dirname(root)
-	fname	= os.path.basename(root)
-	candidate = fname+ext
-	index	= 1
-	ls		= set(os.listdir(dir))
-	while candidate in ls:
-			candidate = "{}_{}{}".format(fname,index,ext)
-			index	+= 1
-
-	return os.path.join(dir, candidate)
-
-###############################################################################
-
 # ###############################################################################
-# def createOutputFileName(path):
-# 	'''Create a valid output filename. if the name of the file already exists the file name is auto-incremented.'''
-# 	path	  = os.path.expanduser(path)
+# def createCSV(reader, csv, step, filename):
+# 	lastTimeStamp = 0
+# 	swathwidth = [] #a list of swath widths so we can smooth
+# 	depths = [] # a list of nadir depths so we can smooth a little
+# 	ping = 0
+# 	left = 0
+# 	right = 0
+# 	window = 100 #sliding window size in number of pings, to smooth the data
+# 	maximumPortCoverageDegrees = 0
+# 	maximumPortWidth = 0
+# 	maximumStbdCoverageDegrees = 0
+# 	maximumStbdWidth = 0
+# 	mode = ''
+# 	acrosstrackresolution = 0
+# 	alongtrackresolution = 0
+# 	nbeams = 0
+# 	speed = 0
+# 	pingtimes = []
+# 	prevX = 0
+# 	prevY = 0
+# 	prevT = 0
 
-# 	if not os.path.exists(os.path.dirname(path)):
-# 		os.makedirs(os.path.dirname(path))
+# 	reader.rewind()
+# 	while reader.moreData():
+# 		TypeOfDatagram, datagram = reader.readDatagram()
+# 		if TypeOfDatagram == 'R':
+# 			datagram.read()
+# 			maximumPortCoverageDegrees = datagram.maximumPortCoverageDegrees
+# 			maximumPortWidth = datagram.maximumPortWidth
+# 			maximumStbdCoverageDegrees = datagram.maximumStbdCoverageDegrees
+# 			maximumStbdWidth = datagram.maximumStbdWidth
+# 			depthmode = datagram.DepthMode
 
-# 	if not os.path.exists(path):
-# 		return path
+# 		if TypeOfDatagram == 'P':
+# 			datagram.read()
+# 			speed = datagram.SpeedOverGround
+# 			distance = math.sqrt( ((datagram.Longitude - prevX) **2) + ((datagram.Latitude - prevY) **2))
+# 			dtime = max(to_timestamp(reader.currentRecordDateTime()) - prevT, 0.001)
+# 			speed = (distance/dtime) * 60.0 * 3600 # need to convert from degrees to knots
+# 			prevX = datagram.Longitude
+# 			prevY = datagram.Latitude
+# 			prevT = to_timestamp(reader.currentRecordDateTime())
 
-# 	root, ext = os.path.splitext(os.path.expanduser(path))
-# 	dir	   = os.path.dirname(root)
-# 	fname	 = os.path.basename(root)
-# 	candidate = fname+ext
-# 	index	 = 1
-# 	ls		= set(os.listdir(dir))
-# 	while candidate in ls:
-# 			candidate = "{}_{}{}".format(fname,index,ext)
-# 			index	+= 1
+# 		if TypeOfDatagram == 'D' or TypeOfDatagram == 'X':
+# 			datagram.read()
+# 			if len(datagram.AcrossTrackDistance) == 0:
+# 				continue
+# 			if len(datagram.Depth) == 0:
+# 				continue
+# 			nadirbeamno = math.floor(len(datagram.Depth)/2)
+# 			if (math.fabs(datagram.AcrossTrackDistance[0]) > 0) and (math.fabs(datagram.AcrossTrackDistance[-1]) > 0):
+# 				left = min(datagram.AcrossTrackDistance)
+# 				right = max(datagram.AcrossTrackDistance)
+# 				swathwidth.append(math.fabs(left) + math.fabs(right))
+# 				depths.append(median(datagram.Depth))
+# 				# depths.append(statistics.median(datagram.Depth))
+# 				# depths.append(datagram.Depth[nadirbeamno])
+# 				pingtimes.append(to_timestamp(reader.currentRecordDateTime()))
+# 				ping = datagram.Counter
+# 				nbeams = datagram.NBeams
 
-# 	return os.path.join(dir, candidate)
+# 		# add to the shape file at the user required interval
+# 		if to_timestamp(reader.currentRecordDateTime()) - lastTimeStamp >= step:
+# 			if len(depths) == 0 or len(swathwidth) == 0:
+# 				continue
+# 			# we use the maximum depth as the spikes are not real and are typically always shallower
+# 			# we use the median swath width to get a representative swath
+# 			swath = median(swathwidth)
+# 			# swath = statistics.median(swathwidth)
+# 			acrosstrackresolution = swath / nbeams
+# 			duration = ( pingtimes[-1] - pingtimes[0] ) / len(pingtimes) #compute the time between pings over the moving window so we see some stability
+# 			alongtrackresolution = (speed * (1852/3600)) * duration #convert speed to metres/second
+# 			csv.write("%s,%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s,%.3f,%.3f,%.3f\n" % (filename, str(reader.currentRecordDateTime()), ping, max(depths), swath, maximumPortWidth, maximumStbdWidth, maximumPortCoverageDegrees, maximumStbdCoverageDegrees, depthmode, speed, acrosstrackresolution, alongtrackresolution))
+# 			lastTimeStamp = to_timestamp(reader.currentRecordDateTime())
+
+# 		if len(depths) > window:
+# 			depths.pop(0)
+# 			swathwidth.pop(0)
+# 			pingtimes.pop(0)
+# 	return
 
 if __name__ == "__main__":
 	main()

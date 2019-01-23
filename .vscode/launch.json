@@ -8,15 +8,16 @@
             "stopOnEntry": false,
             "program": "${file}",
             "pythonPath": "python.exe",
-			"args": ["-i", "C:/projects/IslandPrideSupport/Sample Data/GeoTIFF/2014-06-27T16-28-26.000.05856.164.65078-18236.tif"]
+			"args": ["-i", "C:/development/python/sample.all", "-s","30", "-tl", "-epsg", "32755", "-opath", "c:/temp", "-odir", "GIS"]
         }
-   ]
+	]
 }
 
 
 
+"args": ["-r", "-i", "Z:/SampleData/OIWoodside/Raw AUV Missions/20180617_4300_064_P05_S02_A00_010/*.all", "-s","20", "-tl", "-o", "trackplot"]
+"args": ["-i", "C:/projects/IslandPrideSupport/Sample Data/GeoTIFF/2014-06-27T16-28-26.000.05856.164.65078-18236.tif"]
 "args": ["-i", "F:\\Projects\\GP1600\\schlangen\\0136_20170915_224607_OE_P1_02.all", "-tl", "-s", "30", "-o", "test.shp"]
-"args": ["-i", "C:/development/python/sample.all", "-s","0", "-tp", "-o", "coverage.shp"]
 "args": ["-i", "C:/development/python/0075_20150519_171612_Merlin.all", "-s","0", "-tp", "-o", "coverage.shp"]
 "args": ["-i", "C:/development/python/EM302/*.all", "-s","10", "-c"]
             "args": ["-i", "C:/development/python/EM302/1504_20140905_230622_Fugro_Equator_GA4421.all"]
