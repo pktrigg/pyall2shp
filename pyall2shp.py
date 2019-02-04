@@ -10,10 +10,11 @@ from datetime import datetime
 from datetime import timedelta
 from glob import glob
 import multiprocessing as mp
+import pyproj
+import logging
 
 # local imports
-import pyall
-import pyproj
+# import pyall
 
 # local from the shared area...
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'shared'))
@@ -22,35 +23,62 @@ import geodetic
 import SSDM
 import shapefile
 
+# we need to do this as airflow and regular python cmdline interpreter differ.
+localpath = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(localpath)
+
+# import shapefile
+import pyall
+
+
 # sys.path.append("../shared")
 # import Common
 # from ..Shared import SSDM
 ##############################################################################
-def main():
+# def main():
+def main(*opargs, **kwargs):
+	logging.info('Running PYALL2SHP')
+
 	parser = ArgumentParser(description='Read Kongsberg ALL file and create an ESRI shape file of the trackplot.',
 			epilog='Example: \n To process a single file use -i c:/temp/myfile.all \n to mass process every file in a folder use -i c:/temp/*.all\n To convert all .all files recursively in a folder, use -r -i c:/temp \n To convert all .all files recursively from the current folder, use -r -i ./*.all \n', formatter_class=RawTextHelpFormatter)
-	parser.add_argument('-i', dest='inputFile', action='store', help='-i <ALLfilename> : input ALL filename to image. It can also be a wildcard, e.g. *.all')
-	parser.add_argument('-o', dest='outputFile', action='store', default='', help='-o <SHPfilename.shp> : output filename to create. e.g. coverage.shp [Default: coverage.shp]')
-	parser.add_argument('-s', dest='step', action='store', default='30', help='-s <step size in seconds> : decimate the data to reduce the output size. [Default: 30]')
-	parser.add_argument('-tc', action='store_true', default=False, dest='trackcoverage', help='-c : create coverage polygon shapefile.')
-	parser.add_argument('-tl', action='store_true', default=False, dest='trackline', help='-tl : create track polyline shapefile.')
-	parser.add_argument('-tp', action='store_true', default=False, dest='trackpoint', help='-tp : create track point shapefile, with runtime information per ping.')
-	parser.add_argument('-odir', dest='odir', action='store', default="", help='Specify a relative output folder e.g. -odir GIS')
-	parser.add_argument('-opath', dest='opath', action='store', default="", help='Specify an output path e.g. -opath c:/temp')
-	parser.add_argument('-odix', dest='odix', action='store', default="", help='Specify an output filename appendage e.g. -odix _coverage')
-	parser.add_argument('-r', action='store_true', default=False, dest='recursive', help='-r : search recursively.')
-	parser.add_argument('-epsg', dest='epsg', action='store', default="", help='Specify an output EPSG code for transforming from WGS84 to East,North,e.g. -epsg 4326')
-	parser.add_argument('-cores', dest='cores', action='store', default="0", help='Specify the number of cores to use for processing. By default all cores shall be used, e.g. -cores 4')
+	parser.add_argument('-i', 		dest='inputFile', 	action='store', 		default='',		help='input ALL filename to image. It can also be a wildcard, e.g. *.all')
+	parser.add_argument('-o', 		dest='outputFile', 	action='store', 		default='', 	help='output filename to create. e.g. coverage.shp [Default: coverage.shp]')
+	parser.add_argument('-s', 		dest='step', 		action='store', 		default='30', 	help='decimate the data to reduce the output size. [Default: 30]')
+	parser.add_argument('-ta', 		dest='trackall', 	action='store_true', 	default=False, 	help='create trackline, point and coverage polygon shapefiles.')
+	parser.add_argument('-tc', 		dest='trackcoverage',action='store_true', 	default=False,  help='create coverage polygon shapefile.')
+	parser.add_argument('-tl', 		dest='trackline',	action='store_true', 	default=False,  help='create track polyline shapefile.')
+	parser.add_argument('-tp', 		dest='trackpoint',	action='store_true', 	default=False,  help='create track point shapefile, with runtime information per ping.')
+	parser.add_argument('-odir', 	dest='odir', 		action='store', 		default="", 	help='Specify a relative output folder e.g. -odir GIS')
+	parser.add_argument('-opath', 	dest='opath', 		action='store', 		default="", 	help='Specify an output path e.g. -opath c:/temp')
+	parser.add_argument('-odix', 	dest='odix', 		action='store', 		default="", 	help='Specify an output filename appendage e.g. -odix _coverage')
+	parser.add_argument('-r', 		dest='recursive',	action='store_true', 	default=False,  help='search recursively.')
+	parser.add_argument('-epsg', 	dest='epsg', 		action='store', 		default="0", 	help='Specify an output EPSG code for transforming from WGS84 to East,North,e.g. -epsg 4326')
+	parser.add_argument('-cores', 	dest='cores', 		action='store', 		default="0", 	help='Specify the number of cores to use for processing. By default all cores shall be used, e.g. -cores 4')
+
+	# logging.info("OPARGS",opargs)
+
+	# need to handle args from command line AND from Airflow.  they come from different streams
+	if len(opargs) > 0:
+		args = parser.parse_args(opargs)
+	else:
+		args = parser.parse_args()
+
+	# logging.info("XXX",args)
 
 	if len(sys.argv)==1:
 		parser.print_help()
 		sys.exit(1)
 
-	args = parser.parse_args()
+	# if len(sys.argv)==1:
+	# 	parser.print_help()
+	# 	sys.exit(1)
+
+	# args = parser.parse_args()
 	process(args)
 
 ###############################################################################
 def process(args):
+
 	matches = fileutils.findFiles(args.recursive, args.inputFile, "*.all")
 
 	if len(args.outputFile) == 0:
@@ -66,12 +94,12 @@ def process(args):
 	trackLineFileName = fileutils.createOutputFileName(trackLineFileName)
 
 	# trackPointFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_MBESPoint.shp")
-	trackPointFileName = os.path.join(args.opath, args.odir, os.path.basename(args.outputFile) + "_MBESPoint.shp")
+	trackPointFileName = os.path.join(args.opath, args.odir, os.path.basename(args.outputFile) + "Survey_TrackPoint.shp")
 	trackPointFileName  = addFileNameAppendage(trackPointFileName, args.odix)
 	trackPointFileName = fileutils.createOutputFileName(trackPointFileName)
 
 	# trackCoverageFileName = os.path.join(os.path.dirname(os.path.abspath(args.outputFile)), fname + "_trackCoverage.shp")
-	trackCoverageFileName = os.path.join(args.opath, args.odir, os.path.basename(args.outputFile) + "_MBESCoverage.shp")
+	trackCoverageFileName = os.path.join(args.opath, args.odir, os.path.basename(args.outputFile) + "Survey_TrackCoverage.shp")
 	trackCoverageFileName  = addFileNameAppendage(trackCoverageFileName, args.odix)
 	trackCoverageFileName = fileutils.createOutputFileName(trackCoverageFileName)
 
@@ -89,7 +117,12 @@ def process(args):
 	TLshp = None
 	TCshp = None
 
-	# fileCounter=0
+	if args.trackall:
+		args.trackpoint = True
+		args.trackline = True
+		args.trackcoverage = True
+
+
 	if args.trackpoint:
 		TPshp = SSDM.createPointShapeFile(trackPointFileName)
 	if args.trackline:
@@ -97,7 +130,7 @@ def process(args):
 	if args.trackcoverage:
 		TCshp = SSDM.createCoverageSHP(trackCoverageFileName)
 
-	MULTICORE = False
+	MULTICORE = True
 
 	if MULTICORE:
 		# # for multiprocessing we call the process tool based on the number of cores.
@@ -156,31 +189,32 @@ def process(args):
 	#now we can write out the results to a shape file...
 	# update_progress("Process Complete: ", (fileCounter/len(matches)))
 	if args.trackpoint:
-		print ("Saving track point shapefile: %s" % trackPointFileName)
+		print ("Saving track point: %s" % trackPointFileName)
 		TPshp.save(trackPointFileName)
 		# now write out a prj file so the data has a spatial Reference
 		filename = trackPointFileName.replace('.shp','.prj')
 		geodetic.writePRJ(filename, args.epsg)
 	if args.trackline:
-		print ("Saving track line shapefile: %s" % trackLineFileName)
+		print ("Saving track line: %s" % trackLineFileName)
 		TLshp.save(trackLineFileName)
 		# now write out a prj file so the data has a spatial Reference
 		filename = trackLineFileName.replace('.shp','.prj')
 		geodetic.writePRJ(filename, args.epsg)
 	if args.trackcoverage:
-		print ("Saving coverage polygon shapefile: %s" % trackCoverageFileName)
+		print ("Saving coverage polygon: %s" % trackCoverageFileName)
 		TCshp.save(trackCoverageFileName)
 		# now write out a prj file so the data has a spatial Reference
 		filename = trackCoverageFileName.replace('.shp','.prj')
 		geodetic.writePRJ(filename, args.epsg)
 
 def processTrackPoint(filename, step, trackPointFileName, projection):
-	dirname, basename = os.path.split(filename)
-	trackPointFileName = tempfile.NamedTemporaryFile(prefix=basename, dir=dirname)
+	# dirname, basename = os.path.split(filename)
+	# trackPointFileName = tempfile.NamedTemporaryFile(prefix=basename, dir=dirname)
 	shp = SSDM.createPointShapeFile(trackPointFileName)
 	reader = pyall.ALLReader(filename)
 	# create the track point with a point recoard and metadata per ping
 	createTrackPoint(reader, shp, step, projection)
+	print ("Trackpoint created for: %s" % (filename))
 	reader.close()
 	return shp
 
@@ -189,7 +223,7 @@ def processTrackLine(filename, step, trackLineFileName, projection):
 	reader = pyall.ALLReader(filename)
 	# create the track polyline
 	totalDistanceRun = createTrackLine(reader, shp, step, projection)
-	print ("%s Trackplot Length: %.3f" % (filename, totalDistanceRun))
+	print ("Trackplot created for: %s, Length: %.3f" % (filename, totalDistanceRun))
 	reader.close()
 	return shp
 
@@ -198,6 +232,7 @@ def processTrackCoverage(filename, step, trackCoverageFileName, projection):
 	reader = pyall.ALLReader(filename)
 	# create the coverage polygon
 	createTrackCoverage(reader, shp, step, projection)
+	print ("Trackcoverage created for: %s" % (filename))
 	reader.close()
 	return shp
 
@@ -353,7 +388,12 @@ def createTrackLine(reader, trackLine, step, projection):
 				line.append([float(update[2]),float(update[1])])
 			lastTimeStamp = update[0]
 	# now add the very last update
-	line.append([float(navigation[-1][2]),float(navigation[-1][1])])
+	if projection is not None:
+		x,y = projection(float(navigation[-1][2]),float(navigation[-1][1]))
+		line.append([x,y])
+	else:
+		line.append([float(navigation[-1][2]),float(navigation[-1][1])])
+	# line.append([float(navigation[-1][2]),float(navigation[-1][1])])
 	# print("Points added to track: %d" % (len(line)))
 	line_parts.append(line)
 	trackLine.line(parts=line_parts)
@@ -412,7 +452,7 @@ def createTrackCoverage(reader, coveragePoly, step, projection):
 				longitude = datagram.Longitude
 				if lastheading == None:
 					lastheading = datagram.Heading
-				pendingrecord = True #performance upgrade
+				pendingrecord = True #performance upgrade. only make the coverage at the same rate as the navigation. no oint any faster
 
 		if pendingrecord == True:
 			if TypeOfDatagram == 'D' or TypeOfDatagram == 'X':
@@ -457,7 +497,7 @@ def createTrackCoverage(reader, coveragePoly, step, projection):
 			# if the heading within the line has changed by more than 30 degrees, write out a polygon and continue.
 			# if abs (hdg - lastheading) > 30:
 			if (180 - abs (abs(hdg - lastheading) -180)) > 30:
-				writepolygon(coveragePoly, left, right, lastTimeStamp, reader.fileName)
+				coveragePoly = writepolygon(coveragePoly, left, right, lastTimeStamp, reader.fileName)
 				lastheading = hdg
 
 		if len(leftside) > window:
@@ -465,7 +505,18 @@ def createTrackCoverage(reader, coveragePoly, step, projection):
 			rightside.pop(0)
 			heading.pop(0)
 	# now write out the last part of the polygon to ensure full coverage
+	leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg - 90 , math.fabs(leftextent))
+	rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg + 90, math.fabs(rightextent))
+	if projection is not None:
+		x,y = projection(float(leftLongitude),float(leftLatitude))
+		left.append([x,y])
+		x,y = projection(float(rightLongitude),float(rightLatitude))
+		right.append([x,y])
+	else:
+		left.append([leftLongitude,leftLatitude])
+		right.append([rightLongitude,rightLatitude])
 	coveragePoly = writepolygon(coveragePoly, left, right, lastTimeStamp, reader.fileName)
+
 	return coveragePoly
 
 ###############################################################################

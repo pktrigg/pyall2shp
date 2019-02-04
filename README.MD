@@ -13,6 +13,7 @@ pyall2shp
 
 Done
 ====
+* fixed bug in converage plot where last ping was not added to polygon
 * moved shared code to ../shared
 * added option to run in non-multicore.  this is good for debugging
 * update shp file to be SSDM compliant trackplot **note shape file field length is contstrained, so not all fieldsnames comply as they are truncated.

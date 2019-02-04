@@ -8,7 +8,7 @@
             "stopOnEntry": false,
             "program": "${file}",
             "pythonPath": "python.exe",
-			"args": ["-i", "C:/development/python/sample.all", "-s","30", "-tl", "-epsg", "32755", "-opath", "c:/temp", "-odir", "GIS"]
+			"args": ["-i", "C:/projects/tmatchtrials/raw/*.all", "-s","10", "-tp", "-epsg", "32730"]
         }
 	]
 }
