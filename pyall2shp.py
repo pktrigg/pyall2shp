@@ -439,6 +439,9 @@ def createTrackCoverage(reader, coveragePoly, step, projection):
 	rightside = [] #sliding window
 	window = step #sliding window size in number of pings, to smooth the data
 	pendingrecord = False
+	leftextent = 0
+	rightextent = 0
+	hdg = 0
 
 	reader.rewind()
 	while reader.moreData():
@@ -505,6 +508,8 @@ def createTrackCoverage(reader, coveragePoly, step, projection):
 			rightside.pop(0)
 			heading.pop(0)
 	# now write out the last part of the polygon to ensure full coverage
+	if latitude == 0:
+		return
 	leftLatitude, leftLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg - 90 , math.fabs(leftextent))
 	rightLatitude, rightLongitude, leftAz = geodetic.calculateGeographicalPositionFromRangeBearing(latitude, longitude, hdg + 90, math.fabs(rightextent))
 	if projection is not None:
