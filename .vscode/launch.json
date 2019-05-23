@@ -8,7 +8,7 @@
             "stopOnEntry": false,
             "program": "${file}",
             "pythonPath": "python.exe",
-			"args": ["-i", "C:/projects/tmatchtrials/raw/*.all", "-s","10", "-tp", "-epsg", "32730"]
+			"args": ["-i", "x:/projects/KrakenVigoTrialsMay2019/RAW/20190507_6100_001_P09_S01_A01_005(Hisas)/pp/HISAS/hisas-0026-hsas_180-20190507-194604.all"]
         }
 	]
 }

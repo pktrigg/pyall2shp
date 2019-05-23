@@ -1,8 +1,8 @@
 pyall2shp
 =====
-* created:          November 2016
-* version           2.14
-* by:               p.kennedy@fugro.com
+* created:          Jan 2019
+* version           3.00
+* by:               p.kennedy@guardiangeomatics.com
 * description:      python module to read an Kongsberg .ALL file and create a shape file containing the trackplot in WGS84
 * notes:            See main at end of script for example how to use this
 * based on ALL file version October 2013
@@ -13,6 +13,12 @@ pyall2shp
 
 Done
 ====
+* speed is now to 2DP in point shape file
+* transition output from basic SHP file to SSDM compliant schema for a shape file.
+* added option to produce everything in one go
+* move a lot of code to shared folder to save duplicaiton
+* added support for pyproj so we can now write out in east,north using an EPSG code
+* added option to export to DGN after export.  This is required for Petrobras
 * fixed bug in converage plot where last ping was not added to polygon
 * moved shared code to ../shared
 * added option to run in non-multicore.  this is good for debugging
